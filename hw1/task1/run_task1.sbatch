@@ -1,42 +1,22 @@
 #!/bin/bash
-#SBATCH --job-name=Task1-seq-matrix-mult-makolodin
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --job-name="task1_dgemm"     
+#SBATCH --error=task1_dgemm-%j.err       
+#SBATCH --output=task1_dgemm-%j.log   
+#SBATCH --time=00:05:00
 #SBATCH --cpus-per-task=4
-#SBATCH --time=00:10:00
-#SBATCH --output=Task1-seq-matrix-mult-makolodin.out
-#SBATCH --error=Task1-seq-matrix-mult-makolodin.err
+#SBATCH --nodes=1
+#SBATCH --gpus=0
 
-module load cmake
+cd $SLURM_SUBMIT_DIR/src
 
-# Пробуем разные варианты загрузки компилятора
-if module load gnu8 2>/dev/null; then
-    echo "Loaded gnu8 module"
-elif module load gcc/8.3.0 2>/dev/null; then
-    echo "Loaded gcc/8.3.0 module"
-elif module load gcc 2>/dev/null; then
-    echo "Loaded gcc module"
+echo "Compiling task1..."
+g++ -O3 -fopenmp -o task1 task1.cpp
+
+if [ $? -eq 0 ]; then
+    echo "Compilation successful!"
+    echo "Running task1..."
+    time ./task1
 else
-    echo "Warning: Could not load GCC module, using system compiler"
+    echo "Compilation failed!"
+    exit 1
 fi
-
-# Диагностика модулей
-echo "=== Available modules ==="
-module avail 2>&1 | grep -E "(gcc|gnu|cmake)" | head -10
-
-echo "=== CMake module info ==="
-module spider cmake 2>&1 | head -20
-
-echo "=== GCC module info ==="
-module spider gcc 2>&1 | head -20
-
-mkdir -p build
-cd build
-
-# Настраиваем CMake с явным указанием компилятора
-cmake -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ ..
-
-make -j4
-
-export OMP_NUM_THREADS=4
-./task1
