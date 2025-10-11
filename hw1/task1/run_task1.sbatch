@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name="task1_dgemm"     
-#SBATCH --error=task1_dgemm-%j.err       
-#SBATCH --output=task1_dgemm-%j.log   
+#SBATCH --job-name=task1-dgemm-makolodin     
+#SBATCH --error=task1_dgemm-makolodin-%j.err       
+#SBATCH --output=task1_dgemm-makolodin-%j.log   
 #SBATCH --time=00:05:00
 #SBATCH --cpus-per-task=4
 #SBATCH --nodes=1
