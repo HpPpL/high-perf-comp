@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.10)
 
 project(task1 CXX)
 
@@ -7,7 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_options(-O3)
+# Более совместимые флаги оптимизации
+add_compile_options(-O3 -march=native)
+
+# Проверяем поддержку OpenMP
+find_package(OpenMP REQUIRED)
 
 if(APPLE)
   execute_process(
@@ -29,8 +33,6 @@ if(APPLE)
   set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp")
   set(OpenMP_CXX_LIB_NAMES "omp")
 endif()
-
-find_package(OpenMP REQUIRED)
 
 add_executable(${PROJECT_NAME} task1.cpp)
 
