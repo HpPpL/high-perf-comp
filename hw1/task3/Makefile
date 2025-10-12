@@ -32,7 +32,7 @@ task3_openblas: src/task3.cpp src/task3.h src/task3.hpp
 # MKL version (Linux only)
 task3_mkl: src/task3.cpp src/task3.h src/task3.hpp
 ifeq ($(MKL_AVAILABLE),true)
-	$(CXX) $(CXXFLAGS) -DUSE_MKL -o task3_mkl src/task3.cpp -lmkl_intel_lp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -ldl $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -DUSE_MKL -I$(MKLROOT)/include -o task3_mkl src/task3.cpp -L$(MKLROOT)/lib/intel64 -lmkl_intel_lp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -ldl $(LDFLAGS)
 else
 	@echo "MKL is not available on macOS. Use 'make task3_openblas' instead."
 	@exit 1

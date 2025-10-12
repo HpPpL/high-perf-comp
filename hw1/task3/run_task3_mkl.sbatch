@@ -3,10 +3,10 @@
 #SBATCH --output=task3_mkl-makolodin-%j.out
 #SBATCH --error=task3_mkl-makolodin-%j.err
 #SBATCH --time=00:30:00
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
+#SBATCH --nodes=1
 #SBATCH --gpus=0
+#SBATCH --ntasks=1
 
 # Load required modules
 module load intel/2020.4
@@ -23,6 +23,14 @@ echo
 # Set environment variables
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+# Check MKL environment
+echo "=== Checking MKL environment ==="
+echo "MKLROOT: $MKLROOT"
+if [ -z "$MKLROOT" ]; then
+    echo "Error: MKLROOT is not set. Make sure Intel module is loaded correctly."
+    exit 1
+fi
 
 # Compile MKL version
 echo "=== Compiling MKL version ==="
