@@ -12,6 +12,21 @@
 module load intel/2020.4
 module load gcc/9.3.0
 
+# Try to load MKL module if available
+module load intel-mkl 2>/dev/null || echo "intel-mkl module not found, trying alternative..."
+
+# Alternative: try to set MKLROOT manually if module doesn't work
+if [ -z "$MKLROOT" ]; then
+    # Try common MKL paths
+    if [ -d "/opt/intel/mkl" ]; then
+        export MKLROOT="/opt/intel/mkl"
+    elif [ -d "/usr/local/intel/mkl" ]; then
+        export MKLROOT="/usr/local/intel/mkl"
+    elif [ -d "$INTEL_HOME/mkl" ]; then
+        export MKLROOT="$INTEL_HOME/mkl"
+    fi
+fi
+
 echo "=== Task 3: MKL Comparison ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURM_NODELIST"
