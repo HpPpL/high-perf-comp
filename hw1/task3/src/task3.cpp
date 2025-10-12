@@ -9,7 +9,7 @@
 #endif
 #include "task3.h"
 
-using namespace dgemm;
+using namespace dgemm_benchmark;
 using namespace std::chrono;
 
 struct BenchmarkResult {

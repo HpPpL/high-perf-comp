@@ -18,7 +18,7 @@
 #include <mkl_cblas.h>
 #endif
 
-namespace dgemm {
+namespace dgemm_benchmark {
     // Original sequential implementation
     void seq_multi(int N, double* A, double* B, double* C) {
         for (int i = 0; i < N; ++i) {

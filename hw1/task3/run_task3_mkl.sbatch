@@ -9,23 +9,8 @@
 #SBATCH --ntasks=1
 
 # Load required modules
-module load intel/2020.4
-module load gcc/9.3.0
-
-# Try to load MKL module if available
-module load intel-mkl 2>/dev/null || echo "intel-mkl module not found, trying alternative..."
-
-# Alternative: try to set MKLROOT manually if module doesn't work
-if [ -z "$MKLROOT" ]; then
-    # Try common MKL paths
-    if [ -d "/opt/intel/mkl" ]; then
-        export MKLROOT="/opt/intel/mkl"
-    elif [ -d "/usr/local/intel/mkl" ]; then
-        export MKLROOT="/usr/local/intel/mkl"
-    elif [ -d "$INTEL_HOME/mkl" ]; then
-        export MKLROOT="$INTEL_HOME/mkl"
-    fi
-fi
+module load Smilei/5.1-cpu
+module load intel/2023a
 
 echo "=== Task 3: MKL Comparison ==="
 echo "Job ID: $SLURM_JOB_ID"
@@ -42,28 +27,12 @@ export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
 # Check MKL environment
 echo "=== Checking MKL environment ==="
 echo "MKLROOT: $MKLROOT"
-echo "INTEL_HOME: $INTEL_HOME"
 echo "Available modules:"
-module list 2>&1 | grep -i intel || echo "No Intel modules found"
-
-# Check if MKL files exist
-echo "Checking for MKL files..."
-find /opt -name "mkl.h" 2>/dev/null | head -3 || echo "No mkl.h found in /opt"
-find /usr -name "mkl.h" 2>/dev/null | head -3 || echo "No mkl.h found in /usr"
+module list 2>&1 | grep -E "(intel|mkl)" || echo "No Intel/MKL modules found"
 
 if [ -z "$MKLROOT" ]; then
     echo "Error: MKLROOT is not set. Make sure Intel module is loaded correctly."
-    echo "Trying to find MKL manually..."
-    
-    # Try to find MKL installation
-    MKL_PATH=$(find /opt /usr/local /usr -name "mkl.h" 2>/dev/null | head -1 | sed 's|/include/mkl.h||')
-    if [ -n "$MKL_PATH" ]; then
-        export MKLROOT="$MKL_PATH"
-        echo "Found MKL at: $MKLROOT"
-    else
-        echo "Could not find MKL installation. Exiting."
-        exit 1
-    fi
+    exit 1
 fi
 
 # Compile MKL version

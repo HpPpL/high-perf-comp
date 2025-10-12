@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-namespace dgemm {
+namespace dgemm_benchmark {
     // Original implementations
     void seq_multi(int N, double* A, double* B, double* C);
     void omp_multi(int N, double* A, double* B, double* C);
