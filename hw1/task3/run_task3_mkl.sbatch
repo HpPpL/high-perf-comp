@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=task3_mkl_comparison
-#SBATCH --output=task3_mkl_%j.out
-#SBATCH --error=task3_mkl_%j.err
+#SBATCH --job-name=task3_mkl_comparison-makolodin
+#SBATCH --output=task3_mkl-makolodin-%j.out
+#SBATCH --error=task3_mkl-makolodin-%j.err
 #SBATCH --time=00:30:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
-#SBATCH --mem=8G
+#SBATCH --gpus=0
 
 # Load required modules
 module load intel/2020.4

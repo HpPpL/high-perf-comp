@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=task3_blas_comparison
-#SBATCH --output=task3_%j.out
-#SBATCH --error=task3_%j.err
+#SBATCH --job-name=task3_blas_comparison-makolodin
+#SBATCH --output=task3-makolodin-%j.out
+#SBATCH --error=task3-makolodin-%j.err
 #SBATCH --time=00:30:00
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
-#SBATCH --mem=8G
+#SBATCH --nodes=1
+#SBATCH --gpus=0
+#SBATCH --ntasks=1
 
 # Load required modules
 module load OpenBlas/v0.3.18
