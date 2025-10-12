@@ -42,9 +42,28 @@ export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
 # Check MKL environment
 echo "=== Checking MKL environment ==="
 echo "MKLROOT: $MKLROOT"
+echo "INTEL_HOME: $INTEL_HOME"
+echo "Available modules:"
+module list 2>&1 | grep -i intel || echo "No Intel modules found"
+
+# Check if MKL files exist
+echo "Checking for MKL files..."
+find /opt -name "mkl.h" 2>/dev/null | head -3 || echo "No mkl.h found in /opt"
+find /usr -name "mkl.h" 2>/dev/null | head -3 || echo "No mkl.h found in /usr"
+
 if [ -z "$MKLROOT" ]; then
     echo "Error: MKLROOT is not set. Make sure Intel module is loaded correctly."
-    exit 1
+    echo "Trying to find MKL manually..."
+    
+    # Try to find MKL installation
+    MKL_PATH=$(find /opt /usr/local /usr -name "mkl.h" 2>/dev/null | head -1 | sed 's|/include/mkl.h||')
+    if [ -n "$MKL_PATH" ]; then
+        export MKLROOT="$MKL_PATH"
+        echo "Found MKL at: $MKLROOT"
+    else
+        echo "Could not find MKL installation. Exiting."
+        exit 1
+    fi
 fi
 
 # Compile MKL version
