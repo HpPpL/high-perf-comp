@@ -8,15 +8,34 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-def load_and_analyze_results(filename='blas_comparison_results.csv'):
+def load_and_analyze_results(data_dir='data'):
     """Load results and perform analysis"""
-    try:
-        df = pd.read_csv(filename)
-        print(f"Loaded {len(df)} benchmark results from {filename}")
-        return df
-    except FileNotFoundError:
-        print(f"Error: File {filename} not found!")
+    import os
+    
+    # List of CSV files to load
+    csv_files = ['mkl_results.csv', 'openblas_results.csv']
+    dataframes = []
+    
+    for filename in csv_files:
+        filepath = os.path.join(data_dir, filename)
+        try:
+            df = pd.read_csv(filepath)
+            print(f"Loaded {len(df)} benchmark results from {filepath}")
+            dataframes.append(df)
+        except FileNotFoundError:
+            print(f"Warning: File {filepath} not found!")
+        except Exception as e:
+            print(f"Error reading {filepath}: {e}")
+    
+    if not dataframes:
+        print("Error: No data files found!")
         return None
+    
+    # Combine all dataframes
+    combined_df = pd.concat(dataframes, ignore_index=True)
+    print(f"Combined dataset contains {len(combined_df)} total results")
+    
+    return combined_df
 
 def create_performance_plots(df):
     """Create performance comparison plots"""
@@ -84,8 +103,12 @@ def create_performance_plots(df):
     ax4.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('blas_performance_analysis.png', dpi=300, bbox_inches='tight')
-    print("Performance analysis plot saved as 'blas_performance_analysis.png'")
+    
+    # Save to data directory
+    import os
+    output_path = os.path.join('data', 'blas_performance_analysis.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Performance analysis plot saved as '{output_path}'")
     
     return fig
 
@@ -141,7 +164,7 @@ def main():
     print_summary_statistics(df)
     
     print("\n" + "="*60)
-    print("Analysis complete! Check 'blas_performance_analysis.png' for visualizations.")
+    print("Analysis complete! Check 'data/blas_performance_analysis.png' for visualizations.")
     print("="*60)
 
 if __name__ == "__main__":

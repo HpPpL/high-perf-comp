@@ -1,0 +1,329 @@
+=== Task 3: BLAS Comparison ===
+Job ID: 3129387
+Node: cn-032
+CPUs: 24
+Memory:  MB
+Start time: Вс окт 12 13:20:59 MSK 2025
+
+=== Compiling OpenBLAS version ===
+rm -f task3_openblas task3_mkl *.csv
+g++ -O3 -std=c++11 -fopenmp -Wall -Wextra -DUSE_OPENBLAS  -o task3_openblas src/task3.cpp -lopenblas -fopenmp
+OpenBLAS compilation successful
+
+=== Running OpenBLAS benchmarks ===
+=== DGEMM Performance Comparison ===
+Matrix sizes: 500 1000 1500 
+Thread counts: 1 2 4 8 16 24 
+
+=== Correctness Verification ===
+Sequential vs OpenMP: ✓ PASS
+Sequential vs OpenBLAS: ✓ PASS
+Sequential vs MKL: ✓ PASS
+
+=== Performance Benchmarks ===
+
+=== Matrix size: 500x500 ===
+Testing Sequential (N=500, threads=1)...
+  Time: 187.75 ms
+  GFLOPS: 1.33
+Testing OpenMP (N=500, threads=1)...
+  Time: 76.01 ms
+  GFLOPS: 3.29
+Testing OpenBLAS (N=500, threads=1)...
+  Time: 0.76 ms
+  GFLOPS: 327.80
+Testing MKL (N=500, threads=1)...
+  Time: 132.08 ms
+  GFLOPS: 1.89
+Testing Sequential (N=500, threads=2)...
+  Time: 132.64 ms
+  GFLOPS: 1.88
+Testing OpenMP (N=500, threads=2)...
+  Time: 51.12 ms
+  GFLOPS: 4.89
+Testing OpenBLAS (N=500, threads=2)...
+  Time: 0.89 ms
+  GFLOPS: 279.75
+Testing MKL (N=500, threads=2)...
+  Time: 132.13 ms
+  GFLOPS: 1.89
+Testing Sequential (N=500, threads=4)...
+  Time: 132.24 ms
+  GFLOPS: 1.89
+Testing OpenMP (N=500, threads=4)...
+  Time: 33.47 ms
+  GFLOPS: 7.47
+Testing OpenBLAS (N=500, threads=4)...
+  Time: 0.88 ms
+  GFLOPS: 282.81
+Testing MKL (N=500, threads=4)...
+  Time: 131.99 ms
+  GFLOPS: 1.89
+Testing Sequential (N=500, threads=8)...
+  Time: 132.35 ms
+  GFLOPS: 1.89
+Testing OpenMP (N=500, threads=8)...
+  Time: 20.27 ms
+  GFLOPS: 12.33
+Testing OpenBLAS (N=500, threads=8)...
+  Time: 1.04 ms
+  GFLOPS: 240.15
+Testing MKL (N=500, threads=8)...
+  Time: 164.53 ms
+  GFLOPS: 1.52
+Testing Sequential (N=500, threads=16)...
+  Time: 145.11 ms
+  GFLOPS: 1.72
+Testing OpenMP (N=500, threads=16)...
+  Time: 11.67 ms
+  GFLOPS: 21.42
+Testing OpenBLAS (N=500, threads=16)...
+  Time: 1.14 ms
+  GFLOPS: 220.14
+Testing MKL (N=500, threads=16)...
+  Time: 132.13 ms
+  GFLOPS: 1.89
+Testing Sequential (N=500, threads=24)...
+  Time: 132.49 ms
+  GFLOPS: 1.89
+Testing OpenMP (N=500, threads=24)...
+  Time: 8.64 ms
+  GFLOPS: 28.93
+Testing OpenBLAS (N=500, threads=24)...
+  Time: 0.63 ms
+  GFLOPS: 398.09
+Testing MKL (N=500, threads=24)...
+  Time: 132.06 ms
+  GFLOPS: 1.89
+
+=== Matrix size: 1000x1000 ===
+Testing Sequential (N=1000, threads=1)...
+  Time: 1149.54 ms
+  GFLOPS: 1.74
+Testing OpenMP (N=1000, threads=1)...
+  Time: 652.10 ms
+  GFLOPS: 3.07
+Testing OpenBLAS (N=1000, threads=1)...
+  Time: 3.87 ms
+  GFLOPS: 517.42
+Testing MKL (N=1000, threads=1)...
+  Time: 1145.29 ms
+  GFLOPS: 1.75
+Testing Sequential (N=1000, threads=2)...
+  Time: 1140.22 ms
+  GFLOPS: 1.75
+Testing OpenMP (N=1000, threads=2)...
+  Time: 358.00 ms
+  GFLOPS: 5.59
+Testing OpenBLAS (N=1000, threads=2)...
+  Time: 6.08 ms
+  GFLOPS: 328.88
+Testing MKL (N=1000, threads=2)...
+  Time: 1176.48 ms
+  GFLOPS: 1.70
+Testing Sequential (N=1000, threads=4)...
+  Time: 1138.03 ms
+  GFLOPS: 1.76
+Testing OpenMP (N=1000, threads=4)...
+  Time: 172.83 ms
+  GFLOPS: 11.57
+Testing OpenBLAS (N=1000, threads=4)...
+  Time: 5.20 ms
+  GFLOPS: 384.79
+Testing MKL (N=1000, threads=4)...
+  Time: 1150.71 ms
+  GFLOPS: 1.74
+Testing Sequential (N=1000, threads=8)...
+  Time: 1142.06 ms
+  GFLOPS: 1.75
+Testing OpenMP (N=1000, threads=8)...
+  Time: 116.92 ms
+  GFLOPS: 17.11
+Testing OpenBLAS (N=1000, threads=8)...
+  Time: 5.43 ms
+  GFLOPS: 368.57
+Testing MKL (N=1000, threads=8)...
+  Time: 1151.36 ms
+  GFLOPS: 1.74
+Testing Sequential (N=1000, threads=16)...
+  Time: 1146.33 ms
+  GFLOPS: 1.74
+Testing OpenMP (N=1000, threads=16)...
+  Time: 51.48 ms
+  GFLOPS: 38.85
+Testing OpenBLAS (N=1000, threads=16)...
+  Time: 6.91 ms
+  GFLOPS: 289.44
+Testing MKL (N=1000, threads=16)...
+  Time: 1149.86 ms
+  GFLOPS: 1.74
+Testing Sequential (N=1000, threads=24)...
+  Time: 1139.81 ms
+  GFLOPS: 1.75
+Testing OpenMP (N=1000, threads=24)...
+  Time: 66.19 ms
+  GFLOPS: 30.21
+Testing OpenBLAS (N=1000, threads=24)...
+  Time: 7.79 ms
+  GFLOPS: 256.68
+Testing MKL (N=1000, threads=24)...
+  Time: 1109.49 ms
+  GFLOPS: 1.80
+
+=== Matrix size: 1500x1500 ===
+Testing Sequential (N=1500, threads=1)...
+  Time: 4027.58 ms
+  GFLOPS: 1.68
+Testing OpenMP (N=1500, threads=1)...
+  Time: 2280.78 ms
+  GFLOPS: 2.96
+Testing OpenBLAS (N=1500, threads=1)...
+  Time: 9.79 ms
+  GFLOPS: 689.55
+Testing MKL (N=1500, threads=1)...
+  Time: 3890.38 ms
+  GFLOPS: 1.74
+Testing Sequential (N=1500, threads=2)...
+  Time: 3953.28 ms
+  GFLOPS: 1.71
+Testing OpenMP (N=1500, threads=2)...
+  Time: 1012.96 ms
+  GFLOPS: 6.66
+Testing OpenBLAS (N=1500, threads=2)...
+  Time: 14.79 ms
+  GFLOPS: 456.29
+Testing MKL (N=1500, threads=2)...
+  Time: 4008.56 ms
+  GFLOPS: 1.68
+Testing Sequential (N=1500, threads=4)...
+  Time: 3939.70 ms
+  GFLOPS: 1.71
+Testing OpenMP (N=1500, threads=4)...
+  Time: 549.69 ms
+  GFLOPS: 12.28
+Testing OpenBLAS (N=1500, threads=4)...
+  Time: 14.05 ms
+  GFLOPS: 480.26
+Testing MKL (N=1500, threads=4)...
+  Time: 3994.72 ms
+  GFLOPS: 1.69
+Testing Sequential (N=1500, threads=8)...
+  Time: 3996.86 ms
+  GFLOPS: 1.69
+Testing OpenMP (N=1500, threads=8)...
+  Time: 268.32 ms
+  GFLOPS: 25.16
+Testing OpenBLAS (N=1500, threads=8)...
+  Time: 10.73 ms
+  GFLOPS: 629.00
+Testing MKL (N=1500, threads=8)...
+  Time: 3867.19 ms
+  GFLOPS: 1.75
+Testing Sequential (N=1500, threads=16)...
+  Time: 3942.21 ms
+  GFLOPS: 1.71
+Testing OpenMP (N=1500, threads=16)...
+  Time: 224.65 ms
+  GFLOPS: 30.05
+Testing OpenBLAS (N=1500, threads=16)...
+  Time: 14.37 ms
+  GFLOPS: 469.76
+Testing MKL (N=1500, threads=16)...
+  Time: 4043.86 ms
+  GFLOPS: 1.67
+Testing Sequential (N=1500, threads=24)...
+  Time: 3880.78 ms
+  GFLOPS: 1.74
+Testing OpenMP (N=1500, threads=24)...
+  Time: 150.07 ms
+  GFLOPS: 44.98
+Testing OpenBLAS (N=1500, threads=24)...
+  Time: 10.26 ms
+  GFLOPS: 657.70
+Testing MKL (N=1500, threads=24)...
+  Time: 4017.15 ms
+  GFLOPS: 1.68
+Results saved to blas_comparison_results.csv
+
+=== Summary Results ===
+      Method     N Threads   Time (ms)      GFLOPS
+----------------------------------------------------
+  Sequential   500       1      187.75        1.33
+      OpenMP   500       1       76.01        3.29
+    OpenBLAS   500       1        0.76      327.80
+         MKL   500       1      132.08        1.89
+  Sequential   500       2      132.64        1.88
+      OpenMP   500       2       51.12        4.89
+    OpenBLAS   500       2        0.89      279.75
+         MKL   500       2      132.13        1.89
+  Sequential   500       4      132.24        1.89
+      OpenMP   500       4       33.47        7.47
+    OpenBLAS   500       4        0.88      282.81
+         MKL   500       4      131.99        1.89
+  Sequential   500       8      132.35        1.89
+      OpenMP   500       8       20.27       12.33
+    OpenBLAS   500       8        1.04      240.15
+         MKL   500       8      164.53        1.52
+  Sequential   500      16      145.11        1.72
+      OpenMP   500      16       11.67       21.42
+    OpenBLAS   500      16        1.14      220.14
+         MKL   500      16      132.13        1.89
+  Sequential   500      24      132.49        1.89
+      OpenMP   500      24        8.64       28.93
+    OpenBLAS   500      24        0.63      398.09
+         MKL   500      24      132.06        1.89
+  Sequential  1000       1     1149.54        1.74
+      OpenMP  1000       1      652.10        3.07
+    OpenBLAS  1000       1        3.87      517.42
+         MKL  1000       1     1145.29        1.75
+  Sequential  1000       2     1140.22        1.75
+      OpenMP  1000       2      358.00        5.59
+    OpenBLAS  1000       2        6.08      328.88
+         MKL  1000       2     1176.48        1.70
+  Sequential  1000       4     1138.03        1.76
+      OpenMP  1000       4      172.83       11.57
+    OpenBLAS  1000       4        5.20      384.79
+         MKL  1000       4     1150.71        1.74
+  Sequential  1000       8     1142.06        1.75
+      OpenMP  1000       8      116.92       17.11
+    OpenBLAS  1000       8        5.43      368.57
+         MKL  1000       8     1151.36        1.74
+  Sequential  1000      16     1146.33        1.74
+      OpenMP  1000      16       51.48       38.85
+    OpenBLAS  1000      16        6.91      289.44
+         MKL  1000      16     1149.86        1.74
+  Sequential  1000      24     1139.81        1.75
+      OpenMP  1000      24       66.19       30.21
+    OpenBLAS  1000      24        7.79      256.68
+         MKL  1000      24     1109.49        1.80
+  Sequential  1500       1     4027.58        1.68
+      OpenMP  1500       1     2280.78        2.96
+    OpenBLAS  1500       1        9.79      689.55
+         MKL  1500       1     3890.38        1.74
+  Sequential  1500       2     3953.28        1.71
+      OpenMP  1500       2     1012.96        6.66
+    OpenBLAS  1500       2       14.79      456.29
+         MKL  1500       2     4008.56        1.68
+  Sequential  1500       4     3939.70        1.71
+      OpenMP  1500       4      549.69       12.28
+    OpenBLAS  1500       4       14.05      480.26
+         MKL  1500       4     3994.72        1.69
+  Sequential  1500       8     3996.86        1.69
+      OpenMP  1500       8      268.32       25.16
+    OpenBLAS  1500       8       10.73      629.00
+         MKL  1500       8     3867.19        1.75
+  Sequential  1500      16     3942.21        1.71
+      OpenMP  1500      16      224.65       30.05
+    OpenBLAS  1500      16       14.37      469.76
+         MKL  1500      16     4043.86        1.67
+  Sequential  1500      24     3880.78        1.74
+      OpenMP  1500      24      150.07       44.98
+    OpenBLAS  1500      24       10.26      657.70
+         MKL  1500      24     4017.15        1.68
+
+OpenBLAS results saved to openblas_results.csv
+
+=== Job completed ===
+End time: Вс окт 12 13:25:38 MSK 2025
+Results files:
+-rw-r--r-- 1 makolodin users 1991 окт 12 13:25 openblas_results.csv
