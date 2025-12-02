@@ -120,8 +120,18 @@ float benchmarkKernel(void (*kernel)(double*, double*, double*, int),
     
     float totalTime = 0.0f;
     for (int run = 0; run < numRuns; ++run) {
+        // CRITICAL: Synchronize before recording start event to ensure previous operations are complete
+        cudaDeviceSynchronize();
         cudaEventRecord(start);
         kernel<<<gridDim, blockDim>>>(d_A, d_B, d_C, N);
+        
+        // Check for kernel launch errors
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
+            return -1.0f;
+        }
+        
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
         
@@ -189,12 +199,20 @@ int main(int argc, char* argv[]) {
     std::cout << "\n1. Testing without padding (potential bank conflicts)..." << std::endl;
     float timeNoPadding = benchmarkKernel(matrixMultiplySharedNoPadding, 
                                           d_A, d_B, d_C, N, gridDim, blockDim, numRuns);
+    if (timeNoPadding < 0.0f) {
+        std::cerr << "Error during benchmark (no padding)" << std::endl;
+        return 1;
+    }
     double gflopsNoPadding = calculateGFLOPS(N, timeNoPadding);
     
     // Test version with padding (bank conflict avoidance)
     std::cout << "2. Testing with padding (bank conflict avoidance)..." << std::endl;
     float timePadded = benchmarkKernel(matrixMultiplySharedPadded, 
                                        d_A, d_B, d_C, N, gridDim, blockDim, numRuns);
+    if (timePadded < 0.0f) {
+        std::cerr << "Error during benchmark (with padding)" << std::endl;
+        return 1;
+    }
     double gflopsPadded = calculateGFLOPS(N, timePadded);
     
     // Results

@@ -132,8 +132,18 @@ int main(int argc, char* argv[]) {
     
     std::cout << "Running " << numRuns << " iterations..." << std::endl;
     for (int run = 0; run < numRuns; ++run) {
+        // CRITICAL: Synchronize before recording start event to ensure previous operations are complete
+        cudaDeviceSynchronize();
         cudaEventRecord(start);
         matrixMultiplyGlobal<<<gridDim, blockDim>>>(A, B, C, N);
+        
+        // Check for kernel launch errors
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
+            return 1;
+        }
+        
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
         

@@ -78,7 +78,8 @@ def plot_comparison_by_size(df):
         for n in sizes:
             matching = data[data['N'] == n]
             if len(matching) > 0:
-                times.append(matching['time_ms'].iloc[0])
+                # Use mean to average multiple runs for the same N
+                times.append(matching['time_ms'].mean())
             else:
                 times.append(np.nan)
         ax1.plot(sizes, times, marker='o', linewidth=2.5, markersize=10, 
@@ -217,7 +218,8 @@ def plot_bank_conflicts():
         for n in sizes:
             matching = data[data['N'] == n]
             if len(matching) > 0:
-                times.append(matching['time_ms'].iloc[0])
+                # Use mean to average multiple runs for the same N
+                times.append(matching['time_ms'].mean())
             else:
                 times.append(0)
         offset = (i - len(versions)/2 + 0.5) * width / len(versions)
@@ -238,7 +240,8 @@ def plot_bank_conflicts():
         for n in sizes:
             matching = data[data['N'] == n]
             if len(matching) > 0:
-                gflops.append(matching['gflops'].iloc[0])
+                # Use mean to average multiple runs for the same N
+                gflops.append(matching['gflops'].mean())
             else:
                 gflops.append(0)
         offset = (i - len(versions)/2 + 0.5) * width / len(versions)
@@ -344,7 +347,8 @@ def plot_size_scalability(df):
         for n in sizes:
             matching = data[data['N'] == n]
             if len(matching) > 0:
-                times.append(matching['time_ms'].iloc[0])
+                # Use mean to average multiple runs for the same N
+                times.append(matching['time_ms'].mean())
             else:
                 times.append(np.nan)
         ax1.plot(sizes, times, marker='o', linewidth=2.5, markersize=10, 
@@ -365,7 +369,8 @@ def plot_size_scalability(df):
         for n in sizes:
             matching = data[data['N'] == n]
             if len(matching) > 0:
-                gflops.append(matching['gflops'].iloc[0])
+                # Use mean to average multiple runs for the same N
+                gflops.append(matching['gflops'].mean())
             else:
                 gflops.append(np.nan)
         ax2.plot(sizes, gflops, marker='s', linewidth=2.5, markersize=10, 

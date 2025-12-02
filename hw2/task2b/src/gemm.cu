@@ -135,6 +135,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Strategy: Each stream processes a tile, overlapping data transfer and computation" << std::endl;
     
     for (int run = 0; run < numRuns; ++run) {
+        // CRITICAL: Synchronize before recording start event to ensure previous operations are complete
+        cudaDeviceSynchronize();
         cudaEventRecord(start);
         
         // Process matrix in tiles using different streams
@@ -151,11 +153,15 @@ int main(int argc, char* argv[]) {
             size_t tileSizeBytes = actualTileSize * N * sizeof(double);
             
             // Copy tile of A asynchronously to device
-            cudaMemcpyAsync(d_A + tileRowStart * N, 
+            cudaError_t err = cudaMemcpyAsync(d_A + tileRowStart * N, 
                           h_A + tileRowStart * N, 
                           tileSizeBytes, 
                           cudaMemcpyHostToDevice, 
                           streams[streamIdx]);
+            if (err != cudaSuccess) {
+                std::cerr << "CUDA memcpy error: " << cudaGetErrorString(err) << std::endl;
+                return 1;
+            }
             
             // Launch kernel for this tile in the same stream
             // Kernel will wait for copy to complete
@@ -164,12 +170,23 @@ int main(int argc, char* argv[]) {
             matrixMultiplyTile<<<tileGridDim, blockDim, 0, streams[streamIdx]>>>(
                 d_A, d_B, d_C, N, tileRowStart, tileRowEnd);
             
+            // Check for kernel launch errors
+            err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
+                return 1;
+            }
+            
             // Copy result tile back asynchronously
-            cudaMemcpyAsync(h_C + tileRowStart * N,
+            err = cudaMemcpyAsync(h_C + tileRowStart * N,
                           d_C + tileRowStart * N,
                           tileSizeBytes,
                           cudaMemcpyDeviceToHost,
                           streams[streamIdx]);
+            if (err != cudaSuccess) {
+                std::cerr << "CUDA memcpy error: " << cudaGetErrorString(err) << std::endl;
+                return 1;
+            }
         }
         
         // Synchronize all streams
@@ -205,6 +222,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Results saved to task2b_results.csv" << std::endl;
     
     // Verify results
+    // Ensure all async operations are complete before verification
+    cudaDeviceSynchronize();
     std::cout << "\nVerifying results..." << std::endl;
     double *C_cpu = new double[N * N];
     matrixMultiplyCPU(h_A, h_B, C_cpu, N);
