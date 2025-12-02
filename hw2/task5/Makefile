@@ -1,6 +1,7 @@
 # OpenMP GPU compilation using nvc (NVIDIA HPC SDK)
 NVC = nvc
-NVCFLAGS = -O3 -mp=gpu -gpu=cc75
+# Use -mp=gpu without specific architecture - nvc will auto-detect
+NVCFLAGS = -O3 -mp=gpu
 TARGET = gemm
 SOURCES = src/gemm.c
 
@@ -8,6 +9,7 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
     # On cluster, use nvhpc module
     NVC = nvc
+    # Let nvc auto-detect GPU architecture
     NVCFLAGS = -O3 -mp=gpu
 else
     # Local - may not have nvc, use gcc with OpenMP (will run on CPU)

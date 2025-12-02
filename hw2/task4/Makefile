@@ -1,5 +1,11 @@
 NVCC = nvcc
-NVCCFLAGS = -O3 -arch=sm_75 -std=c++14
+# Support multiple compute capabilities for better GPU compatibility
+NVCCFLAGS = -O3 -std=c++14 \
+    -gencode arch=compute_70,code=sm_70 \
+    -gencode arch=compute_75,code=sm_75 \
+    -gencode arch=compute_80,code=sm_80 \
+    -gencode arch=compute_86,code=sm_86 \
+    -gencode arch=compute_89,code=sm_89
 TARGET = gemm
 SOURCES = src/gemm.cu
 

@@ -148,8 +148,7 @@ int main(int argc, char* argv[]) {
             
             if (actualTileSize <= 0) continue;
             
-            // Calculate offset and size for this tile
-            size_t tileOffset = tileRowStart * N * sizeof(double);
+            // Calculate size for this tile
             size_t tileSizeBytes = actualTileSize * N * sizeof(double);
             
             // Copy tile of A asynchronously to device
