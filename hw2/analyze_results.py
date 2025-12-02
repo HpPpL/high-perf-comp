@@ -126,6 +126,23 @@ def plot_streams_analysis():
         print("  Файл task2b_results.csv не найден или пуст")
         return
     
+    # Фильтруем по фиксированному tile_size=512 для анализа streams
+    # (512 обычно оптимальный размер тайла)
+    if 'tile_size' in df.columns:
+        original_len = len(df)
+        df_filtered = df[df['tile_size'] == 512]
+        if len(df_filtered) > 0:
+            df = df_filtered
+            print(f"  Используем данные с tile_size=512 ({len(df)} из {original_len} записей)")
+        else:
+            print(f"  Нет данных с tile_size=512, используем все данные ({len(df)} записей)")
+            # Если нет данных с 512, берем среднее по tile_size для каждого (N, num_streams)
+            if len(df) > 0:
+                df = df.groupby(['N', 'num_streams']).agg({
+                    'time_ms': 'mean',
+                    'gflops': 'mean'
+                }).reset_index()
+    
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
     
     streams = sorted(df['num_streams'].unique())
@@ -138,7 +155,8 @@ def plot_streams_analysis():
         for s in streams:
             matching = data[data['num_streams'] == s]
             if len(matching) > 0:
-                times.append(matching['time_ms'].iloc[0])
+                # Если несколько записей (разные tile_size), берем среднее
+                times.append(matching['time_ms'].mean())
             else:
                 times.append(np.nan)
         ax1.plot(streams, times, marker='o', linewidth=2.5, markersize=10, 
@@ -157,7 +175,8 @@ def plot_streams_analysis():
         for s in streams:
             matching = data[data['num_streams'] == s]
             if len(matching) > 0:
-                gflops.append(matching['gflops'].iloc[0])
+                # Если несколько записей (разные tile_size), берем среднее
+                gflops.append(matching['gflops'].mean())
             else:
                 gflops.append(np.nan)
         ax2.plot(streams, gflops, marker='s', linewidth=2.5, markersize=10, 
@@ -236,6 +255,77 @@ def plot_bank_conflicts():
     plt.tight_layout()
     plt.savefig('bank_conflicts_analysis.png', dpi=300, bbox_inches='tight')
     print("  Сохранен график: bank_conflicts_analysis.png")
+    plt.close()
+
+def plot_tile_size_analysis():
+    """Анализ Task 2b: зависимость от размера тайла"""
+    print("Создание графика анализа tile_size...")
+    
+    df = load_results('task2b', 'task2b_results.csv')
+    if df is None or len(df) == 0:
+        print("  Файл task2b_results.csv не найден или пуст")
+        return
+    
+    # Фильтруем по фиксированному num_streams=4 для анализа tile_size
+    if 'num_streams' in df.columns:
+        original_len = len(df)
+        df_filtered = df[df['num_streams'] == 4]
+        if len(df_filtered) > 0:
+            df = df_filtered
+            print(f"  Используем данные с num_streams=4 ({len(df)} из {original_len} записей)")
+        else:
+            print(f"  Нет данных с num_streams=4, используем все данные")
+    
+    if 'tile_size' not in df.columns or len(df) == 0:
+        print("  Нет данных для анализа tile_size")
+        return
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+    
+    tile_sizes = sorted(df['tile_size'].unique())
+    sizes = sorted(df['N'].unique())
+    
+    # График времени от размера тайла
+    for size in sizes:
+        data = df[df['N'] == size]
+        times = []
+        for ts in tile_sizes:
+            matching = data[data['tile_size'] == ts]
+            if len(matching) > 0:
+                times.append(matching['time_ms'].mean())
+            else:
+                times.append(np.nan)
+        ax1.plot(tile_sizes, times, marker='o', linewidth=2.5, markersize=10, 
+                label=f'N={size}', markerfacecolor='white', markeredgewidth=2)
+    
+    ax1.set_xlabel('Размер тайла (tile_size)', fontsize=13, fontweight='bold')
+    ax1.set_ylabel('Время выполнения (мс)', fontsize=13, fontweight='bold')
+    ax1.set_title('Время выполнения vs Размер тайла (num_streams=4)', fontsize=14, fontweight='bold')
+    ax1.legend(fontsize=11, loc='best')
+    ax1.grid(True, alpha=0.3, linestyle='--')
+    
+    # График производительности от размера тайла
+    for size in sizes:
+        data = df[df['N'] == size]
+        gflops = []
+        for ts in tile_sizes:
+            matching = data[data['tile_size'] == ts]
+            if len(matching) > 0:
+                gflops.append(matching['gflops'].mean())
+            else:
+                gflops.append(np.nan)
+        ax2.plot(tile_sizes, gflops, marker='s', linewidth=2.5, markersize=10, 
+                label=f'N={size}', markerfacecolor='white', markeredgewidth=2)
+    
+    ax2.set_xlabel('Размер тайла (tile_size)', fontsize=13, fontweight='bold')
+    ax2.set_ylabel('Производительность (GFLOPS)', fontsize=13, fontweight='bold')
+    ax2.set_title('Производительность vs Размер тайла (num_streams=4)', fontsize=14, fontweight='bold')
+    ax2.legend(fontsize=11, loc='best')
+    ax2.grid(True, alpha=0.3, linestyle='--')
+    
+    plt.tight_layout()
+    plt.savefig('tile_size_analysis.png', dpi=300, bbox_inches='tight')
+    print("  Сохранен график: tile_size_analysis.png")
     plt.close()
 
 def plot_size_scalability(df):
@@ -329,6 +419,7 @@ def main():
     plot_size_scalability(df)
     plot_streams_analysis()
     plot_bank_conflicts()
+    plot_tile_size_analysis()  # Дополнительный график для анализа tile_size
     
     # Сводная таблица
     create_summary_table(df)
@@ -340,6 +431,7 @@ def main():
     print("  - performance_comparison.png")
     print("  - scalability_analysis.png")
     print("  - streams_analysis.png")
+    print("  - tile_size_analysis.png")
     print("  - bank_conflicts_analysis.png")
     print("\nДля создания PDF из графиков используйте:")
     print("  convert *.png gemm.pdf")
