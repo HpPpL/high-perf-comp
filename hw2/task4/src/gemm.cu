@@ -68,7 +68,14 @@ int main(int argc, char* argv[]) {
     
     // Create cuBLAS handle
     cublasHandle_t handle;
-    cublasCreate(&handle);
+    cublasStatus_t status = cublasCreate(&handle);
+    if (status != CUBLAS_STATUS_SUCCESS) {
+        std::cerr << "cuBLAS initialization failed!" << std::endl;
+        return 1;
+    }
+    
+    // Set cuBLAS to use default stream (synchronous)
+    cublasSetStream(handle, 0);
     
     // Allocate pinned memory
     size_t matrixSize = N * N * sizeof(double);
@@ -99,6 +106,11 @@ int main(int argc, char* argv[]) {
     const double alpha = 1.0;
     const double beta = 0.0;
     
+    // Create CUDA events for timing
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    
     // Warm up
     std::cout << "\nWarming up..." << std::endl;
     cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
@@ -110,17 +122,15 @@ int main(int argc, char* argv[]) {
                 d_C, N);
     cudaDeviceSynchronize();
     
-    // Create CUDA events for timing
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    
     // Benchmark
     const int numRuns = 10;
     float totalTime = 0.0f;
     
     std::cout << "Running " << numRuns << " iterations..." << std::endl;
     for (int run = 0; run < numRuns; ++run) {
+        // Ensure previous operations are complete
+        cudaDeviceSynchronize();
+        
         cudaEventRecord(start);
         
         // cuBLAS DGEMM: C = alpha * A * B + beta * C

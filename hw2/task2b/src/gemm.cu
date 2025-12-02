@@ -106,25 +106,20 @@ int main(int argc, char* argv[]) {
         cudaStreamCreate(&streams[i]);
     }
     
-    // For streams, we'll copy full matrices once and use streams for overlapping
-    // multiple kernel launches or process matrix in chunks
-    // Simplified approach: copy full matrices, then use streams for parallel kernel execution
-    
-    // Copy full matrices to device (can be done asynchronously)
-    cudaMemcpy(d_A, h_A, matrixSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_B, h_B, matrixSize, cudaMemcpyHostToDevice);
-    
-    // Configure kernel launch parameters for full matrix
+    // Use streams for overlapping computation and data transfer
+    // Copy full matrices to device asynchronously using streams
     int blockSize = 16;
     dim3 blockDim(blockSize, blockSize);
     dim3 gridDim((N + blockSize - 1) / blockSize, (N + blockSize - 1) / blockSize);
     
     // Warm up
     std::cout << "\nWarming up..." << std::endl;
+    cudaMemcpy(d_A, h_A, matrixSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, h_B, matrixSize, cudaMemcpyHostToDevice);
     matrixMultiplyGlobal<<<gridDim, blockDim>>>(d_A, d_B, d_C, N);
     cudaDeviceSynchronize();
     
-    // Benchmark with streams - launch multiple kernels in parallel streams
+    // Benchmark with streams - overlap computation and data transfer
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -133,24 +128,36 @@ int main(int argc, char* argv[]) {
     float totalTime = 0.0f;
     
     std::cout << "Running " << numRuns << " iterations with " << numStreams << " streams..." << std::endl;
-    std::cout << "Note: Using streams for overlapping kernel launches" << std::endl;
+    std::cout << "Note: Using streams for overlapping computation and data transfer" << std::endl;
     
     for (int run = 0; run < numRuns; ++run) {
         cudaEventRecord(start);
         
-        // Launch kernels in different streams to demonstrate stream usage
-        // In practice, you would process different tiles in different streams
+        // Use streams to overlap data transfer and computation
+        // Pipeline: while one stream computes, others can transfer data
+        // For this demonstration, we use streams to overlap operations
+        
+        // Copy data asynchronously using different streams
         for (int i = 0; i < numStreams; ++i) {
-            // Each stream processes the same matrix (for demonstration)
-            // In real scenario, each stream would process different tiles
-            matrixMultiplyGlobal<<<gridDim, blockDim, 0, streams[i]>>>(
-                d_A, d_B, d_C, N);
+            // Distribute work across streams (each stream handles a portion)
+            // For simplicity, we'll use streams to pipeline the same operation
+            // In practice, you would split the matrix into tiles
+            cudaMemcpyAsync(d_A, h_A, matrixSize, cudaMemcpyHostToDevice, streams[i % numStreams]);
+            cudaMemcpyAsync(d_B, h_B, matrixSize, cudaMemcpyHostToDevice, streams[i % numStreams]);
         }
+        
+        // Launch kernel - use default stream for computation
+        // (In real scenario, you'd launch kernels in different streams for different tiles)
+        matrixMultiplyGlobal<<<gridDim, blockDim>>>(d_A, d_B, d_C, N);
+        
+        // Copy result back asynchronously using streams
+        cudaMemcpyAsync(h_C, d_C, matrixSize, cudaMemcpyDeviceToHost, streams[0]);
         
         // Synchronize all streams
         for (int i = 0; i < numStreams; ++i) {
             cudaStreamSynchronize(streams[i]);
         }
+        cudaDeviceSynchronize();
         
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
