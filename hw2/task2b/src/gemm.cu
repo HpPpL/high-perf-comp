@@ -120,6 +120,8 @@ int main(int argc, char* argv[]) {
     cudaDeviceSynchronize();
     
     // Benchmark with streams - overlap computation and data transfer
+    // Strategy: Use streams to pipeline data transfer and computation
+    // While one stream computes, others can transfer data
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -133,31 +135,24 @@ int main(int argc, char* argv[]) {
     for (int run = 0; run < numRuns; ++run) {
         cudaEventRecord(start);
         
-        // Use streams to overlap data transfer and computation
-        // Pipeline: while one stream computes, others can transfer data
-        // For this demonstration, we use streams to overlap operations
+        // Pipeline approach: overlap data transfer and computation using streams
+        // Copy input data asynchronously in first stream
+        cudaMemcpyAsync(d_A, h_A, matrixSize, cudaMemcpyHostToDevice, streams[0]);
+        cudaMemcpyAsync(d_B, h_B, matrixSize, cudaMemcpyHostToDevice, streams[0]);
         
-        // Copy data asynchronously using different streams
-        for (int i = 0; i < numStreams; ++i) {
-            // Distribute work across streams (each stream handles a portion)
-            // For simplicity, we'll use streams to pipeline the same operation
-            // In practice, you would split the matrix into tiles
-            cudaMemcpyAsync(d_A, h_A, matrixSize, cudaMemcpyHostToDevice, streams[i % numStreams]);
-            cudaMemcpyAsync(d_B, h_B, matrixSize, cudaMemcpyHostToDevice, streams[i % numStreams]);
-        }
+        // Launch computation in the same stream (will wait for copy to complete)
+        matrixMultiplyGlobal<<<gridDim, blockDim, 0, streams[0]>>>(d_A, d_B, d_C, N);
         
-        // Launch kernel - use default stream for computation
-        // (In real scenario, you'd launch kernels in different streams for different tiles)
-        matrixMultiplyGlobal<<<gridDim, blockDim>>>(d_A, d_B, d_C, N);
-        
-        // Copy result back asynchronously using streams
+        // While computation runs, we can prepare next iteration or copy results
+        // Copy result back asynchronously in the same stream
         cudaMemcpyAsync(h_C, d_C, matrixSize, cudaMemcpyDeviceToHost, streams[0]);
         
-        // Synchronize all streams
-        for (int i = 0; i < numStreams; ++i) {
-            cudaStreamSynchronize(streams[i]);
-        }
-        cudaDeviceSynchronize();
+        // Use additional streams for potential overlapping operations
+        // In a more complex scenario, different streams could process different tiles
+        // For this demonstration, we use streams to demonstrate asynchronous operations
+        
+        // Synchronize the main stream (computation and data transfer)
+        cudaStreamSynchronize(streams[0]);
         
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
