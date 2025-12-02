@@ -432,50 +432,146 @@ def plot_task2b_variants_comparison():
         print("  Файл task2b_results.csv не найден или пуст")
         return
     
+    # Исправляем формат данных: CSV имеет неоднородный формат
+    # Для streams: variant,N,num_streams,block_size,time_ms,gflops (правильно)
+    # Для остальных: variant,N,block_size,time_ms,gflops, но в CSV это:
+    #   variant,N,param1,param2,time_ms,gflops где param2=time_ms, time_ms=gflops
+    df_corrected = df.copy()
+    
+    for idx, row in df.iterrows():
+        variant = row['variant']
+        if variant == 'streams':
+            # Для streams формат правильный, ничего не меняем
+            continue
+        elif variant in ['global', 'unified', 'shared', 'shared_opt', 'cublas']:
+            # Для этих вариантов: param2 это time_ms, а time_ms колонка содержит gflops
+            # Исправляем: param2 -> time_ms, time_ms -> gflops
+            if pd.notna(row['param2']):
+                df_corrected.at[idx, 'time_ms'] = row['param2']
+            if pd.notna(row['time_ms']):
+                df_corrected.at[idx, 'gflops'] = row['time_ms']
+    
     # Для каждого варианта берем лучший результат (по GFLOPS)
-    # Для streams берем лучший по num_streams
-    variants = df['variant'].unique()
+    variants = df_corrected['variant'].unique()
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
     
-    sizes = sorted(df['N'].unique())
+    sizes = sorted(df_corrected['N'].unique())
     
-    # График времени выполнения
+    # Собираем все значения для установки пределов осей
+    all_times = []
+    all_gflops = []
+    
+    # Собираем данные для всех вариантов
+    variant_data = {}
     for variant in variants:
-        data = df[df['variant'] == variant]
+        data = df_corrected[df_corrected['variant'] == variant]
         times = []
         gflops_list = []
+        sizes_valid = []
         
         for n in sizes:
             matching = data[data['N'] == n]
             if len(matching) > 0:
-                # Берем лучший результат (максимальный GFLOPS = минимальное время)
-                best = matching.loc[matching['gflops'].idxmax()]
-                times.append(best['time_ms'])
-                gflops_list.append(best['gflops'])
-            else:
-                times.append(np.nan)
-                gflops_list.append(np.nan)
+                # Проверяем наличие валидных значений gflops
+                valid_gflops = matching['gflops'].dropna()
+                if len(valid_gflops) > 0:
+                    # Берем лучший результат (максимальный GFLOPS = минимальное время)
+                    best_idx = valid_gflops.idxmax()
+                    best = matching.loc[best_idx]
+                    times.append(best['time_ms'])
+                    gflops_list.append(best['gflops'])
+                    sizes_valid.append(n)
+                    all_times.append(best['time_ms'])
+                    all_gflops.append(best['gflops'])
         
-        ax1.plot(sizes, times, marker='o', linewidth=2.5, markersize=10, 
-                label=variant, markerfacecolor='white', markeredgewidth=2)
-        ax2.plot(sizes, gflops_list, marker='s', linewidth=2.5, markersize=10, 
-                label=variant, markerfacecolor='white', markeredgewidth=2)
+        if len(times) > 0:
+            variant_data[variant] = {
+                'times': times,
+                'gflops': gflops_list,
+                'sizes': sizes_valid
+            }
     
-    ax1.set_xlabel('Размер матрицы N', fontsize=13, fontweight='bold')
-    ax1.set_ylabel('Время выполнения (мс)', fontsize=13, fontweight='bold')
-    ax1.set_title('Task 2b: Сравнение всех вариантов (время)', fontsize=14, fontweight='bold')
-    ax1.legend(fontsize=11, loc='best')
-    ax1.grid(True, alpha=0.3, linestyle='--')
-    ax1.set_xscale('log', base=2)
-    ax1.set_yscale('log')
-    
-    ax2.set_xlabel('Размер матрицы N', fontsize=13, fontweight='bold')
-    ax2.set_ylabel('Производительность (GFLOPS)', fontsize=13, fontweight='bold')
-    ax2.set_title('Task 2b: Сравнение всех вариантов (производительность)', fontsize=14, fontweight='bold')
-    ax2.legend(fontsize=11, loc='best')
-    ax2.grid(True, alpha=0.3, linestyle='--')
-    ax2.set_xscale('log', base=2)
+    # Если все данные на одном размере N, используем bar chart для лучшей визуализации
+    if len(sizes) == 1:
+        # Bar chart для одного размера
+        x = np.arange(len(variant_data))
+        width = 0.35
+        
+        variant_names = list(variant_data.keys())
+        times_values = [variant_data[v]['times'][0] for v in variant_names]
+        gflops_values = [variant_data[v]['gflops'][0] for v in variant_names]
+        
+        # Сортируем по производительности для лучшей визуализации
+        sorted_indices = sorted(range(len(variant_names)), key=lambda i: gflops_values[i], reverse=True)
+        variant_names = [variant_names[i] for i in sorted_indices]
+        times_values = [times_values[i] for i in sorted_indices]
+        gflops_values = [gflops_values[i] for i in sorted_indices]
+        
+        x_pos = np.arange(len(variant_names))
+        
+        bars1 = ax1.bar(x_pos, times_values, width, alpha=0.8, label='Время выполнения')
+        bars2 = ax2.bar(x_pos, gflops_values, width, alpha=0.8, label='Производительность')
+        
+        ax1.set_xlabel('Вариант', fontsize=13, fontweight='bold')
+        ax1.set_ylabel('Время выполнения (мс)', fontsize=13, fontweight='bold')
+        ax1.set_title(f'Task 2b: Сравнение всех вариантов (время, N={sizes[0]})', fontsize=14, fontweight='bold')
+        ax1.set_xticks(x_pos)
+        ax1.set_xticklabels(variant_names, rotation=45, ha='right')
+        ax1.set_yscale('log')
+        ax1.grid(True, alpha=0.3, linestyle='--', axis='y')
+        
+        # Добавляем значения на столбцы
+        for i, (bar, val) in enumerate(zip(bars1, times_values)):
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+        
+        ax2.set_xlabel('Вариант', fontsize=13, fontweight='bold')
+        ax2.set_ylabel('Производительность (GFLOPS)', fontsize=13, fontweight='bold')
+        ax2.set_title(f'Task 2b: Сравнение всех вариантов (производительность, N={sizes[0]})', fontsize=14, fontweight='bold')
+        ax2.set_xticks(x_pos)
+        ax2.set_xticklabels(variant_names, rotation=45, ha='right')
+        ax2.set_yscale('log')
+        ax2.grid(True, alpha=0.3, linestyle='--', axis='y')
+        
+        # Добавляем значения на столбцы
+        for i, (bar, val) in enumerate(zip(bars2, gflops_values)):
+            height = bar.get_height()
+            ax2.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{val:.1f}', ha='center', va='bottom', fontsize=9)
+    else:
+        # Line plot для нескольких размеров
+        for variant in variant_data:
+            data = variant_data[variant]
+            ax1.plot(data['sizes'], data['times'], marker='o', linewidth=2.5, markersize=12, 
+                    label=variant, markerfacecolor='white', markeredgewidth=2)
+            ax2.plot(data['sizes'], data['gflops'], marker='s', linewidth=2.5, markersize=12, 
+                    label=variant, markerfacecolor='white', markeredgewidth=2)
+        
+        ax1.set_xlabel('Размер матрицы N', fontsize=13, fontweight='bold')
+        ax1.set_ylabel('Время выполнения (мс)', fontsize=13, fontweight='bold')
+        ax1.set_title('Task 2b: Сравнение всех вариантов (время)', fontsize=14, fontweight='bold')
+        ax1.legend(fontsize=11, loc='best')
+        ax1.grid(True, alpha=0.3, linestyle='--')
+        ax1.set_xscale('log', base=2)
+        ax1.set_yscale('log')
+        if all_times:
+            min_time = min(all_times)
+            max_time = max(all_times)
+            ax1.set_ylim([min_time * 0.3, max_time * 3.0])
+        
+        ax2.set_xlabel('Размер матрицы N', fontsize=13, fontweight='bold')
+        ax2.set_ylabel('Производительность (GFLOPS)', fontsize=13, fontweight='bold')
+        ax2.set_title('Task 2b: Сравнение всех вариантов (производительность)', fontsize=14, fontweight='bold')
+        ax2.legend(fontsize=11, loc='best')
+        ax2.grid(True, alpha=0.3, linestyle='--')
+        ax2.set_xscale('log', base=2)
+        ax2.set_yscale('log')
+        if all_gflops:
+            min_gflops = min(all_gflops)
+            max_gflops = max(all_gflops)
+            ax2.set_ylim([min_gflops * 0.3, max_gflops * 3.0])
     
     plt.tight_layout()
     plt.savefig('task2b_variants_comparison.png', dpi=300, bbox_inches='tight')
