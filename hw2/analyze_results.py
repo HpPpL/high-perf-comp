@@ -46,6 +46,28 @@ def load_all_results():
     if df2a is not None:
         results.append(df2a)
     
+    # Task 2b: All variants (global, unified, streams, shared, shared_opt, cublas)
+    df2b = load_results('task2b', 'task2b_results.csv')
+    if df2b is not None:
+        # Преобразуем формат task2b в совместимый формат
+        # Формат task2b: variant,N,param1,param2,time_ms,gflops
+        # Преобразуем в: task,N,time_ms,gflops (и дополнительные колонки)
+        df2b_processed = df2b.copy()
+        df2b_processed['task'] = df2b_processed['variant']
+        
+        # Для streams: param1 = num_streams, param2 = block_size
+        # Для других: param1 = block_size, param2 = 0
+        if 'param1' in df2b_processed.columns:
+            # Создаем отдельные колонки для удобства
+            df2b_processed['num_streams'] = df2b_processed.apply(
+                lambda row: int(row['param1']) if row['variant'] == 'streams' else None, axis=1
+            )
+            df2b_processed['block_size'] = df2b_processed.apply(
+                lambda row: int(row['param2']) if row['variant'] == 'streams' else int(row['param1']), axis=1
+            )
+        
+        results.append(df2b_processed)
+    
     # Task 2c: Shared Memory
     df2c = load_results('task2c', 'task2c_results.csv')
     if df2c is not None:
@@ -127,22 +149,25 @@ def plot_streams_analysis():
         print("  Файл task2b_results.csv не найден или пуст")
         return
     
+    # Фильтруем только streams варианты
+    df_streams = df[df['variant'] == 'streams'].copy()
+    if len(df_streams) == 0:
+        print("  Нет данных streams в task2b_results.csv")
+        return
+    
+    # param1 для streams = num_streams, param2 = block_size
+    df_streams['num_streams'] = df_streams['param1'].astype(int)
+    df_streams['block_size'] = df_streams['param2'].astype(int)
+    
     # Фильтруем по фиксированному block_size=16 для анализа streams
-    # (16 обычно оптимальный размер блока)
-    if 'block_size' in df.columns:
-        original_len = len(df)
-        df_filtered = df[df['block_size'] == 16]
-        if len(df_filtered) > 0:
-            df = df_filtered
-            print(f"  Используем данные с block_size=16 ({len(df)} из {original_len} записей)")
-        else:
-            print(f"  Нет данных с block_size=16, используем все данные ({len(df)} записей)")
-            # Если нет данных с 16, берем среднее по block_size для каждого (N, num_streams)
-            if len(df) > 0:
-                df = df.groupby(['N', 'num_streams']).agg({
-                    'time_ms': 'mean',
-                    'gflops': 'mean'
-                }).reset_index()
+    original_len = len(df_streams)
+    df_filtered = df_streams[df_streams['block_size'] == 16]
+    if len(df_filtered) > 0:
+        df = df_filtered
+        print(f"  Используем данные с block_size=16 ({len(df)} из {original_len} записей)")
+    else:
+        print(f"  Нет данных с block_size=16, используем все данные ({len(df_streams)} записей)")
+        df = df_streams
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
     
@@ -269,17 +294,27 @@ def plot_block_size_analysis():
         print("  Файл task2b_results.csv не найден или пуст")
         return
     
-    # Фильтруем по фиксированному num_streams=4 для анализа block_size
-    if 'num_streams' in df.columns:
-        original_len = len(df)
-        df_filtered = df[df['num_streams'] == 4]
-        if len(df_filtered) > 0:
-            df = df_filtered
-            print(f"  Используем данные с num_streams=4 ({len(df)} из {original_len} записей)")
-        else:
-            print(f"  Нет данных с num_streams=4, используем все данные")
+    # Фильтруем только streams варианты
+    df_streams = df[df['variant'] == 'streams'].copy()
+    if len(df_streams) == 0:
+        print("  Нет данных streams в task2b_results.csv")
+        return
     
-    if 'block_size' not in df.columns or len(df) == 0:
+    # param1 для streams = num_streams, param2 = block_size
+    df_streams['num_streams'] = df_streams['param1'].astype(int)
+    df_streams['block_size'] = df_streams['param2'].astype(int)
+    
+    # Фильтруем по фиксированному num_streams=4 для анализа block_size
+    original_len = len(df_streams)
+    df_filtered = df_streams[df_streams['num_streams'] == 4]
+    if len(df_filtered) > 0:
+        df = df_filtered
+        print(f"  Используем данные с num_streams=4 ({len(df)} из {original_len} записей)")
+    else:
+        print(f"  Нет данных с num_streams=4, используем все данные")
+        df = df_streams
+    
+    if len(df) == 0:
         print("  Нет данных для анализа block_size")
         return
     
@@ -388,6 +423,65 @@ def plot_size_scalability(df):
     print("  Сохранен график: scalability_analysis.png")
     plt.close()
 
+def plot_task2b_variants_comparison():
+    """Сравнение всех вариантов Task 2b"""
+    print("Создание графика сравнения вариантов Task 2b...")
+    
+    df = load_results('task2b', 'task2b_results.csv')
+    if df is None or len(df) == 0:
+        print("  Файл task2b_results.csv не найден или пуст")
+        return
+    
+    # Для каждого варианта берем лучший результат (по GFLOPS)
+    # Для streams берем лучший по num_streams
+    variants = df['variant'].unique()
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+    
+    sizes = sorted(df['N'].unique())
+    
+    # График времени выполнения
+    for variant in variants:
+        data = df[df['variant'] == variant]
+        times = []
+        gflops_list = []
+        
+        for n in sizes:
+            matching = data[data['N'] == n]
+            if len(matching) > 0:
+                # Берем лучший результат (максимальный GFLOPS = минимальное время)
+                best = matching.loc[matching['gflops'].idxmax()]
+                times.append(best['time_ms'])
+                gflops_list.append(best['gflops'])
+            else:
+                times.append(np.nan)
+                gflops_list.append(np.nan)
+        
+        ax1.plot(sizes, times, marker='o', linewidth=2.5, markersize=10, 
+                label=variant, markerfacecolor='white', markeredgewidth=2)
+        ax2.plot(sizes, gflops_list, marker='s', linewidth=2.5, markersize=10, 
+                label=variant, markerfacecolor='white', markeredgewidth=2)
+    
+    ax1.set_xlabel('Размер матрицы N', fontsize=13, fontweight='bold')
+    ax1.set_ylabel('Время выполнения (мс)', fontsize=13, fontweight='bold')
+    ax1.set_title('Task 2b: Сравнение всех вариантов (время)', fontsize=14, fontweight='bold')
+    ax1.legend(fontsize=11, loc='best')
+    ax1.grid(True, alpha=0.3, linestyle='--')
+    ax1.set_xscale('log', base=2)
+    ax1.set_yscale('log')
+    
+    ax2.set_xlabel('Размер матрицы N', fontsize=13, fontweight='bold')
+    ax2.set_ylabel('Производительность (GFLOPS)', fontsize=13, fontweight='bold')
+    ax2.set_title('Task 2b: Сравнение всех вариантов (производительность)', fontsize=14, fontweight='bold')
+    ax2.legend(fontsize=11, loc='best')
+    ax2.grid(True, alpha=0.3, linestyle='--')
+    ax2.set_xscale('log', base=2)
+    
+    plt.tight_layout()
+    plt.savefig('task2b_variants_comparison.png', dpi=300, bbox_inches='tight')
+    print("  Сохранен график: task2b_variants_comparison.png")
+    plt.close()
+
 def create_summary_table(df):
     """Создает сводную таблицу результатов"""
     print("\n=== Сводная таблица результатов ===")
@@ -425,6 +519,7 @@ def main():
     plot_streams_analysis()
     plot_bank_conflicts()
     plot_block_size_analysis()  # Дополнительный график для анализа block_size
+    plot_task2b_variants_comparison()  # Сравнение всех вариантов task2b
     
     # Сводная таблица
     create_summary_table(df)
@@ -438,6 +533,7 @@ def main():
     print("  - streams_analysis.png")
     print("  - block_size_analysis.png")
     print("  - bank_conflicts_analysis.png")
+    print("  - task2b_variants_comparison.png")
     print("\nДля создания PDF из графиков используйте:")
     print("  convert *.png gemm.pdf")
     print("  (требует ImageMagick)")
