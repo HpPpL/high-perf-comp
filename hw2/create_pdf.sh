@@ -11,7 +11,8 @@ fi
 
 # Создать PDF из всех PNG графиков
 convert performance_comparison.png scalability_analysis.png \
-        streams_analysis.png bank_conflicts_analysis.png \
+        streams_analysis.png tile_size_analysis.png \
+        bank_conflicts_analysis.png \
         gemm.pdf
 
 echo "PDF создан: gemm.pdf"
