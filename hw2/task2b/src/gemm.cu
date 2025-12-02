@@ -99,26 +99,10 @@ int main(int argc, char* argv[]) {
     initializeMatrix(h_B, N);
     
     // Allocate device memory for full matrices
-    // Use separate buffers for each stream to enable true overlap
-    double *d_B;  // Shared by all streams
+    double *d_A, *d_B, *d_C;
+    cudaMalloc((void**)&d_A, matrixSize);
     cudaMalloc((void**)&d_B, matrixSize);
-    
-    // Allocate device memory for tiles (one per stream for better overlap)
-    std::vector<double*> d_A_tiles(numStreams, nullptr);
-    std::vector<double*> d_C_tiles(numStreams, nullptr);
-    std::vector<size_t> tileSizes(numStreams, 0);
-    
-    for (int i = 0; i < numStreams; ++i) {
-        int tileRowStart = i * tileSize;
-        int tileRowEnd = std::min(tileRowStart + tileSize, N);
-        int actualTileSize = tileRowEnd - tileRowStart;
-        
-        if (actualTileSize > 0) {
-            tileSizes[i] = actualTileSize * N * sizeof(double);
-            cudaMalloc((void**)&d_A_tiles[i], tileSizes[i]);
-            cudaMalloc((void**)&d_C_tiles[i], tileSizes[i]);
-        }
-    }
+    cudaMalloc((void**)&d_C, matrixSize);
     
     // Create CUDA streams
     std::vector<cudaStream_t> streams(numStreams);
@@ -126,27 +110,18 @@ int main(int argc, char* argv[]) {
         cudaStreamCreate(&streams[i]);
     }
     
-    // Copy full matrix B to device once (used by all streams)
+    // Copy full matrices B to device once (used by all streams)
     cudaMemcpy(d_B, h_B, matrixSize, cudaMemcpyHostToDevice);
     
     // Configure kernel launch parameters
     dim3 blockDim(blockSize, blockSize);
     dim3 gridDim((N + blockSize - 1) / blockSize, (tileSize + blockSize - 1) / blockSize);
     
-    // Warm up - use first stream
+    // Warm up
     std::cout << "\nWarming up..." << std::endl;
-    if (numStreams > 0 && tileSizes[0] > 0) {
-        int tileRowStart = 0;
-        int tileRowEnd = std::min(tileSize, N);
-        int actualTileSize = tileRowEnd - tileRowStart;
-        cudaMemcpyAsync(d_A_tiles[0], h_A + tileRowStart * N, tileSizes[0], 
-                       cudaMemcpyHostToDevice, streams[0]);
-        dim3 warmupGridDim((N + blockSize - 1) / blockSize, 
-                          (actualTileSize + blockSize - 1) / blockSize);
-        matrixMultiplyTile<<<warmupGridDim, blockDim, 0, streams[0]>>>(
-            d_A_tiles[0], d_B, d_C_tiles[0], N, tileRowStart, tileRowEnd);
-        cudaStreamSynchronize(streams[0]);
-    }
+    cudaMemcpy(d_A, h_A, matrixSize, cudaMemcpyHostToDevice);
+    matrixMultiplyTile<<<gridDim, blockDim>>>(d_A, d_B, d_C, N, 0, N);
+    cudaDeviceSynchronize();
     
     // Benchmark with streams - overlap computation and data transfer
     cudaEvent_t start, stop;
@@ -157,28 +132,29 @@ int main(int argc, char* argv[]) {
     float totalTime = 0.0f;
     
     std::cout << "Running " << numRuns << " iterations with " << numStreams << " streams..." << std::endl;
-    std::cout << "Strategy: Pipeline approach - overlap data transfer and computation across streams" << std::endl;
+    std::cout << "Strategy: Each stream processes a tile, overlapping data transfer and computation" << std::endl;
     
     for (int run = 0; run < numRuns; ++run) {
         // CRITICAL: Synchronize before recording start event to ensure previous operations are complete
         cudaDeviceSynchronize();
         cudaEventRecord(start);
         
-        // Pipeline approach: launch operations for all tiles in parallel streams
-        // This allows real overlap: while one stream computes, others transfer data
-        // Each stream uses its own device buffer for better overlap
+        // Process matrix in tiles using different streams
+        // Overlap: while one stream computes, others copy data
         for (int streamIdx = 0; streamIdx < numStreams; ++streamIdx) {
             int tileRowStart = streamIdx * tileSize;
             int tileRowEnd = std::min(tileRowStart + tileSize, N);
             int actualTileSize = tileRowEnd - tileRowStart;
             
-            if (actualTileSize <= 0 || tileSizes[streamIdx] == 0) continue;
+            if (actualTileSize <= 0) continue;
             
-            // Step 1: Copy tile of A asynchronously to device (in parallel with other streams)
-            // Use dedicated buffer for this stream to enable true overlap
-            cudaError_t err = cudaMemcpyAsync(d_A_tiles[streamIdx], 
+            // Calculate size for this tile
+            size_t tileSizeBytes = actualTileSize * N * sizeof(double);
+            
+            // Copy tile of A asynchronously to device
+            cudaError_t err = cudaMemcpyAsync(d_A + tileRowStart * N, 
                           h_A + tileRowStart * N, 
-                          tileSizes[streamIdx], 
+                          tileSizeBytes, 
                           cudaMemcpyHostToDevice, 
                           streams[streamIdx]);
             if (err != cudaSuccess) {
@@ -186,12 +162,12 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             
-            // Step 2: Launch kernel for this tile in the same stream
-            // Kernel will automatically wait for copy to complete (stream dependency)
+            // Launch kernel for this tile in the same stream
+            // Kernel will wait for copy to complete
             dim3 tileGridDim((N + blockSize - 1) / blockSize, 
                            (actualTileSize + blockSize - 1) / blockSize);
             matrixMultiplyTile<<<tileGridDim, blockDim, 0, streams[streamIdx]>>>(
-                d_A_tiles[streamIdx], d_B, d_C_tiles[streamIdx], N, tileRowStart, tileRowEnd);
+                d_A, d_B, d_C, N, tileRowStart, tileRowEnd);
             
             // Check for kernel launch errors
             err = cudaGetLastError();
@@ -200,13 +176,19 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             
-            // NOTE: We do NOT copy results back in the measurement loop
-            // This allows better overlap and more accurate performance measurement
-            // Results will be copied back after all runs are complete
+            // Copy result tile back asynchronously
+            err = cudaMemcpyAsync(h_C + tileRowStart * N,
+                          d_C + tileRowStart * N,
+                          tileSizeBytes,
+                          cudaMemcpyDeviceToHost,
+                          streams[streamIdx]);
+            if (err != cudaSuccess) {
+                std::cerr << "CUDA memcpy error: " << cudaGetErrorString(err) << std::endl;
+                return 1;
+            }
         }
         
-        // Wait for all streams to complete computation
-        // This allows maximum overlap: all streams work in parallel
+        // Synchronize all streams
         for (int i = 0; i < numStreams; ++i) {
             cudaStreamSynchronize(streams[i]);
         }
@@ -217,27 +199,6 @@ int main(int argc, char* argv[]) {
         float milliseconds = 0.0f;
         cudaEventElapsedTime(&milliseconds, start, stop);
         totalTime += milliseconds;
-    }
-    
-    // Copy results back after all measurements (outside timing loop)
-    std::cout << "Copying results back to host..." << std::endl;
-    for (int streamIdx = 0; streamIdx < numStreams; ++streamIdx) {
-        int tileRowStart = streamIdx * tileSize;
-        int tileRowEnd = std::min(tileRowStart + tileSize, N);
-        int actualTileSize = tileRowEnd - tileRowStart;
-        
-        if (actualTileSize <= 0 || tileSizes[streamIdx] == 0) continue;
-        
-        cudaMemcpyAsync(h_C + tileRowStart * N,
-                      d_C_tiles[streamIdx],
-                      tileSizes[streamIdx],
-                      cudaMemcpyDeviceToHost,
-                      streams[streamIdx]);
-    }
-    
-    // Wait for all result copies to complete
-    for (int i = 0; i < numStreams; ++i) {
-        cudaStreamSynchronize(streams[i]);
     }
     
     float avgTime = totalTime / numRuns;
@@ -270,10 +231,10 @@ int main(int argc, char* argv[]) {
     // Cleanup
     for (int i = 0; i < numStreams; ++i) {
         cudaStreamDestroy(streams[i]);
-        if (d_A_tiles[i] != nullptr) cudaFree(d_A_tiles[i]);
-        if (d_C_tiles[i] != nullptr) cudaFree(d_C_tiles[i]);
     }
+    cudaFree(d_A);
     cudaFree(d_B);
+    cudaFree(d_C);
     cudaFreeHost(h_A);
     cudaFreeHost(h_B);
     cudaFreeHost(h_C);
