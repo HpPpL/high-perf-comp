@@ -139,8 +139,8 @@ int main(int argc, char* argv[]) {
         cudaDeviceSynchronize();
         cudaEventRecord(start);
         
-        // Process matrix in tiles using different streams
-        // Overlap: while one stream computes, others copy data
+        // Phase 1: Launch all data transfers asynchronously
+        // This maximizes overlap - all streams start copying data simultaneously
         for (int streamIdx = 0; streamIdx < numStreams; ++streamIdx) {
             int tileRowStart = streamIdx * tileSize;
             int tileRowEnd = std::min(tileRowStart + tileSize, N);
@@ -148,7 +148,6 @@ int main(int argc, char* argv[]) {
             
             if (actualTileSize <= 0) continue;
             
-            // Calculate size for this tile
             size_t tileSizeBytes = actualTileSize * N * sizeof(double);
             
             // Copy tile of A asynchronously to device
@@ -161,34 +160,32 @@ int main(int argc, char* argv[]) {
                 std::cerr << "CUDA memcpy error: " << cudaGetErrorString(err) << std::endl;
                 return 1;
             }
+        }
+        
+        // Phase 2: Launch all kernels asynchronously
+        // Kernels in each stream will wait for their data copy to complete
+        // Multiple streams allow overlap: while one stream computes, others may still be copying/computing
+        for (int streamIdx = 0; streamIdx < numStreams; ++streamIdx) {
+            int tileRowStart = streamIdx * tileSize;
+            int tileRowEnd = std::min(tileRowStart + tileSize, N);
+            int actualTileSize = tileRowEnd - tileRowStart;
             
-            // Launch kernel for this tile in the same stream
-            // Kernel will wait for copy to complete
+            if (actualTileSize <= 0) continue;
+            
             dim3 tileGridDim((N + blockSize - 1) / blockSize, 
                            (actualTileSize + blockSize - 1) / blockSize);
             matrixMultiplyTile<<<tileGridDim, blockDim, 0, streams[streamIdx]>>>(
                 d_A, d_B, d_C, N, tileRowStart, tileRowEnd);
             
-            // Check for kernel launch errors
-            err = cudaGetLastError();
+            cudaError_t err = cudaGetLastError();
             if (err != cudaSuccess) {
                 std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
                 return 1;
             }
-            
-            // Copy result tile back asynchronously
-            err = cudaMemcpyAsync(h_C + tileRowStart * N,
-                          d_C + tileRowStart * N,
-                          tileSizeBytes,
-                          cudaMemcpyDeviceToHost,
-                          streams[streamIdx]);
-            if (err != cudaSuccess) {
-                std::cerr << "CUDA memcpy error: " << cudaGetErrorString(err) << std::endl;
-                return 1;
-            }
         }
         
-        // Synchronize all streams
+        // Wait for all streams to complete their work
+        // This ensures all computations and transfers are done before measuring time
         for (int i = 0; i < numStreams; ++i) {
             cudaStreamSynchronize(streams[i]);
         }
@@ -200,6 +197,21 @@ int main(int argc, char* argv[]) {
         cudaEventElapsedTime(&milliseconds, start, stop);
         totalTime += milliseconds;
     }
+    
+    // Copy results back once after all runs (for verification only)
+    for (int streamIdx = 0; streamIdx < numStreams; ++streamIdx) {
+        int tileRowStart = streamIdx * tileSize;
+        int tileRowEnd = std::min(tileRowStart + tileSize, N);
+        int actualTileSize = tileRowEnd - tileRowStart;
+        if (actualTileSize <= 0) continue;
+        size_t tileSizeBytes = actualTileSize * N * sizeof(double);
+        cudaMemcpyAsync(h_C + tileRowStart * N,
+                      d_C + tileRowStart * N,
+                      tileSizeBytes,
+                      cudaMemcpyDeviceToHost,
+                      streams[streamIdx]);
+    }
+    cudaDeviceSynchronize();
     
     float avgTime = totalTime / numRuns;
     double gflops = calculateGFLOPS(N, avgTime);
