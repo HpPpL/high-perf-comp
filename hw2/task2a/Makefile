@@ -28,7 +28,7 @@ help:
 	@echo ""
 	@echo "Для запуска на кластере:"
 	@echo "  module load nvidia_sdk/nvhpc/23.5"
-	@echo "  srun -n 1 --gpus=1 -A proj_1447 ./$(TARGET)"
+	@echo "  srun -n 1 --gpus=1 ./$(TARGET)"
 
 .PHONY: clean run help
 

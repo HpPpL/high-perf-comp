@@ -36,18 +36,17 @@ sbatch run_task1.sbatch
   #SBATCH --nodes=1
   #SBATCH --ntasks=1
   #SBATCH --gpus=1
-  #SBATCH --account=proj_1447
   
   module load nvidia_sdk/nvhpc/23.5
   ./gemm 2048
 
 5. ИНТЕРАКТИВНЫЙ ЗАПУСК
 -----------------------
-srun -n 1 --gpus=1 -A proj_1447 ./gemm 2048
+srun -n 1 --gpus=1 ./gemm 2048
 
 6. ВЫДЕЛЕНИЕ УЗЛА
 -----------------
-salloc -n 1 --gpus=1 -A proj_1447
+salloc -n 1 --gpus=1
 # После выделения можно запускать многократно:
 ./gemm 2048
 ./gemm 1024

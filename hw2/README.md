@@ -60,13 +60,13 @@ sbatch run_task1.sbatch
 ### Интерактивно
 
 ```bash
-srun -n 1 --gpus=1 -A proj_1447 ./gemm [параметры]
+srun -n 1 --gpus=1 ./gemm [параметры]
 ```
 
 ### Выделение узла
 
 ```bash
-salloc -n 1 --gpus=1 -A proj_1447
+salloc -n 1 --gpus=1
 # После выделения можно запускать программу многократно
 ./gemm [параметры]
 # Для освобождения узла: Ctrl+D

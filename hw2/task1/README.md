@@ -40,7 +40,7 @@ sbatch run_task1.sbatch
 
 ### Интерактивно на кластере:
 ```bash
-srun -n 1 --gpus=1 -A proj_1447 ./gemm 1024
+srun -n 1 --gpus=1 ./gemm 1024
 ```
 
 ## Структура кода

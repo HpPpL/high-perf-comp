@@ -6,7 +6,6 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus=1
-#SBATCH --account=proj_1447
 
 # Load required modules
 module load nvidia_sdk/nvhpc/23.5

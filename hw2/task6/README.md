@@ -48,7 +48,7 @@ nsys profile --trace=cuda,nvtx --cuda-memory-usage=true \
 
 ```bash
 # В SLURM скрипте
-srun -n 1 --gpus=1 -A proj_1447 \
+srun -n 1 --gpus=1 \
     nsys profile --output=gemm_profile ./gemm 2048
 ```
 

@@ -64,7 +64,7 @@ sbatch run_task1.sbatch
 
 ### Интерактивно:
 ```bash
-srun -n 1 --gpus=1 -A proj_1447 ./gemm [параметры]
+srun -n 1 --gpus=1 ./gemm [параметры]
 ```
 
 ## Особенности реализации
