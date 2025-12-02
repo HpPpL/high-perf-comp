@@ -12,13 +12,13 @@ module load nvidia_sdk/nvhpc/23.5
 make clean
 make
 
-echo "=== Testing different number of streams ==="
-./gemm 2048 2 512
-./gemm 2048 4 512
-./gemm 2048 8 512
+echo "=== Testing different number of streams (block size 16) ==="
+./gemm 2048 2 16
+./gemm 2048 4 16
+./gemm 2048 8 16
 
-echo "=== Testing different tile sizes ==="
-./gemm 2048 4 256
-./gemm 2048 4 512
-./gemm 2048 4 1024
+echo "=== Testing different block sizes (4 streams) ==="
+./gemm 2048 4 8
+./gemm 2048 4 16
+./gemm 2048 4 32
 

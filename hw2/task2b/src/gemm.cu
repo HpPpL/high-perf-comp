@@ -7,12 +7,12 @@
 #include <chrono>
 #include <fstream>
 
-// CUDA kernel for matrix multiplication
-__global__ void matrixMultiplyGlobal(double* A, double* B, double* C, int N) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
+// CUDA kernel for matrix multiplication (works on tile)
+__global__ void matrixMultiplyTile(double* A, double* B, double* C, int N, int tileRowStart, int tileRowEnd) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y + tileRowStart;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     
-    if (row < N && col < N) {
+    if (row < tileRowEnd && col < N) {
         double sum = 0.0;
         for (int k = 0; k < N; ++k) {
             sum += A[k * N + row] * B[col * N + k];
@@ -66,16 +66,20 @@ double calculateGFLOPS(int N, double time_ms) {
 int main(int argc, char* argv[]) {
     int N = 2048;
     int numStreams = 4;
-    int tileSize = 512;
+    int blockSize = 16;  // Changed: now this is the block size parameter
     
     if (argc > 1) N = std::atoi(argv[1]);
     if (argc > 2) numStreams = std::atoi(argv[2]);
-    if (argc > 3) tileSize = std::atoi(argv[3]);
+    if (argc > 3) blockSize = std::atoi(argv[3]);
     
-    std::cout << "=== CUDA Matrix Multiplication (CUDA Streams) ===" << std::endl;
+    // Calculate tile size based on matrix size and number of streams
+    int tileSize = (N + numStreams - 1) / numStreams;  // Rows per tile
+    
+    std::cout << "=== CUDA Matrix Multiplication (CUDA Streams with Overlapping) ===" << std::endl;
     std::cout << "Matrix size: " << N << "x" << N << std::endl;
     std::cout << "Number of streams: " << numStreams << std::endl;
-    std::cout << "Tile size: " << tileSize << "x" << tileSize << std::endl;
+    std::cout << "Block size: " << blockSize << "x" << blockSize << std::endl;
+    std::cout << "Tile size (rows per stream): " << tileSize << std::endl;
     
     // Get GPU properties
     cudaDeviceProp prop;
@@ -106,22 +110,20 @@ int main(int argc, char* argv[]) {
         cudaStreamCreate(&streams[i]);
     }
     
-    // Use streams for overlapping computation and data transfer
-    // Copy full matrices to device asynchronously using streams
-    int blockSize = 16;
+    // Copy full matrices B to device once (used by all streams)
+    cudaMemcpy(d_B, h_B, matrixSize, cudaMemcpyHostToDevice);
+    
+    // Configure kernel launch parameters
     dim3 blockDim(blockSize, blockSize);
-    dim3 gridDim((N + blockSize - 1) / blockSize, (N + blockSize - 1) / blockSize);
+    dim3 gridDim((N + blockSize - 1) / blockSize, (tileSize + blockSize - 1) / blockSize);
     
     // Warm up
     std::cout << "\nWarming up..." << std::endl;
     cudaMemcpy(d_A, h_A, matrixSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_B, h_B, matrixSize, cudaMemcpyHostToDevice);
-    matrixMultiplyGlobal<<<gridDim, blockDim>>>(d_A, d_B, d_C, N);
+    matrixMultiplyTile<<<gridDim, blockDim>>>(d_A, d_B, d_C, N, 0, N);
     cudaDeviceSynchronize();
     
     // Benchmark with streams - overlap computation and data transfer
-    // Strategy: Use streams to pipeline data transfer and computation
-    // While one stream computes, others can transfer data
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -130,29 +132,50 @@ int main(int argc, char* argv[]) {
     float totalTime = 0.0f;
     
     std::cout << "Running " << numRuns << " iterations with " << numStreams << " streams..." << std::endl;
-    std::cout << "Note: Using streams for overlapping computation and data transfer" << std::endl;
+    std::cout << "Strategy: Each stream processes a tile, overlapping data transfer and computation" << std::endl;
     
     for (int run = 0; run < numRuns; ++run) {
         cudaEventRecord(start);
         
-        // Pipeline approach: overlap data transfer and computation using streams
-        // Copy input data asynchronously in first stream
-        cudaMemcpyAsync(d_A, h_A, matrixSize, cudaMemcpyHostToDevice, streams[0]);
-        cudaMemcpyAsync(d_B, h_B, matrixSize, cudaMemcpyHostToDevice, streams[0]);
+        // Process matrix in tiles using different streams
+        // Overlap: while one stream computes, others copy data
+        for (int streamIdx = 0; streamIdx < numStreams; ++streamIdx) {
+            int tileRowStart = streamIdx * tileSize;
+            int tileRowEnd = std::min(tileRowStart + tileSize, N);
+            int actualTileSize = tileRowEnd - tileRowStart;
+            
+            if (actualTileSize <= 0) continue;
+            
+            // Calculate offset and size for this tile
+            size_t tileOffset = tileRowStart * N * sizeof(double);
+            size_t tileSizeBytes = actualTileSize * N * sizeof(double);
+            
+            // Copy tile of A asynchronously to device
+            cudaMemcpyAsync(d_A + tileRowStart * N, 
+                          h_A + tileRowStart * N, 
+                          tileSizeBytes, 
+                          cudaMemcpyHostToDevice, 
+                          streams[streamIdx]);
+            
+            // Launch kernel for this tile in the same stream
+            // Kernel will wait for copy to complete
+            dim3 tileGridDim((N + blockSize - 1) / blockSize, 
+                           (actualTileSize + blockSize - 1) / blockSize);
+            matrixMultiplyTile<<<tileGridDim, blockDim, 0, streams[streamIdx]>>>(
+                d_A, d_B, d_C, N, tileRowStart, tileRowEnd);
+            
+            // Copy result tile back asynchronously
+            cudaMemcpyAsync(h_C + tileRowStart * N,
+                          d_C + tileRowStart * N,
+                          tileSizeBytes,
+                          cudaMemcpyDeviceToHost,
+                          streams[streamIdx]);
+        }
         
-        // Launch computation in the same stream (will wait for copy to complete)
-        matrixMultiplyGlobal<<<gridDim, blockDim, 0, streams[0]>>>(d_A, d_B, d_C, N);
-        
-        // While computation runs, we can prepare next iteration or copy results
-        // Copy result back asynchronously in the same stream
-        cudaMemcpyAsync(h_C, d_C, matrixSize, cudaMemcpyDeviceToHost, streams[0]);
-        
-        // Use additional streams for potential overlapping operations
-        // In a more complex scenario, different streams could process different tiles
-        // For this demonstration, we use streams to demonstrate asynchronous operations
-        
-        // Synchronize the main stream (computation and data transfer)
-        cudaStreamSynchronize(streams[0]);
+        // Synchronize all streams
+        for (int i = 0; i < numStreams; ++i) {
+            cudaStreamSynchronize(streams[i]);
+        }
         
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
@@ -173,9 +196,9 @@ int main(int argc, char* argv[]) {
     std::ofstream csvFile("task2b_results.csv", std::ios::app);
     bool fileExists = csvFile.tellp() > 0;
     if (!fileExists) {
-        csvFile << "task,N,num_streams,tile_size,time_ms,gflops\n";
+        csvFile << "task,N,num_streams,block_size,time_ms,gflops\n";
     }
-    csvFile << "task2b," << N << "," << numStreams << "," << tileSize << ","
+    csvFile << "task2b," << N << "," << numStreams << "," << blockSize << ","
             << std::fixed << std::setprecision(3) << avgTime << ","
             << std::setprecision(2) << gflops << "\n";
     csvFile.close();
@@ -204,4 +227,3 @@ int main(int argc, char* argv[]) {
     std::cout << "\nDone!" << std::endl;
     return 0;
 }
-
