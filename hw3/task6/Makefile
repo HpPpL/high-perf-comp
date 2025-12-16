@@ -1,23 +1,33 @@
 CXX = g++
 CXXFLAGS = -O3 -std=c++17 -Wall
 
-# MKL flags
-MKLROOT = /opt/intel/oneapi/mkl/latest
-MKL_INCLUDE = -I$(MKLROOT)/include
-MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+# MKL flags - используем переменную окружения, если установлена
+ifdef MKLROOT
+    MKL_INCLUDE = -I$(MKLROOT)/include
+    MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+else
+    # Пробуем стандартные пути
+    MKLROOT = /opt/intel/oneapi/mkl/latest
+    ifeq ($(wildcard $(MKLROOT)/include),)
+        MKLROOT = /opt/intel/mkl
+    endif
+    ifeq ($(wildcard $(MKLROOT)/include),)
+        MKLROOT = /usr/local/mkl
+    endif
+    MKL_INCLUDE = -I$(MKLROOT)/include
+    MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+endif
+
 MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl
 
 # Detect if running on cluster (Linux) or local (macOS)
 UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Linux)
-    # On cluster, MKL should be available via module
-    MKL_INCLUDE = -I${MKLROOT}/include
-    MKL_LIB_DIR = -L${MKLROOT}/lib/intel64
-else
-    # macOS - try to find MKL or use alternative
-    # For macOS, you might need to install MKL separately or use Accelerate framework
-    MKL_INCLUDE = -I/opt/intel/mkl/include
-    MKL_LIB_DIR = -L/opt/intel/mkl/lib
+ifeq ($(UNAME_S),Darwin)
+    # macOS - try to find MKL or use Accelerate framework
+    ifeq ($(wildcard $(MKLROOT)/include),)
+        MKL_INCLUDE = -I/opt/intel/mkl/include
+        MKL_LIB_DIR = -L/opt/intel/mkl/lib
+    endif
 endif
 
 SOURCES = src/heat_equation_2d.cpp

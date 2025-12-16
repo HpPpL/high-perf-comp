@@ -14,12 +14,24 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
     NVCC = nvcc
     NVCCFLAGS += -Xcompiler -fopenmp
+    # Попытка найти MPI
+    ifeq ($(shell which mpicc 2>/dev/null),)
+        # Пробуем использовать MPI из nvhpc
+        MPI_INC := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi/include
+        MPI_LIB := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi/lib
+        NVCCFLAGS += -I$(MPI_INC)
+        MPI_LIBS := -L$(MPI_LIB) -lmpi
+    else
+        # Используем системный MPI
+        MPI_LIBS := -lmpi
+    endif
 else
     NVCCFLAGS += -Xcompiler -fopenmp
+    MPI_LIBS := -lmpi
 endif
 
 $(TARGET): $(SOURCES)
-	$(NVCC) $(NVCCFLAGS) -o $(TARGET) $(SOURCES) -lmpi
+	$(NVCC) $(NVCCFLAGS) -o $(TARGET) $(SOURCES) $(MPI_LIBS)
 
 clean:
 	rm -f $(TARGET)

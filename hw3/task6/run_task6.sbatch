@@ -7,11 +7,29 @@
 #SBATCH --ntasks=1
 
 # Load required modules
-module load intel/oneapi
+# Пробуем разные варианты загрузки модулей Intel/MKL
+module load intel/oneapi 2>&1 || \
+module load intel/2021 2>&1 || \
+module load mkl 2>&1 || \
+echo "Warning: Intel/MKL module not found, trying direct paths..."
 
-# Set MKL environment
-export MKLROOT=/opt/intel/oneapi/mkl/latest
-export LD_LIBRARY_PATH=$MKLROOT/lib/intel64:$LD_LIBRARY_PATH
+# Set MKL environment - пробуем разные пути
+if [ -z "$MKLROOT" ]; then
+    if [ -d "/opt/intel/oneapi/mkl/latest" ]; then
+        export MKLROOT=/opt/intel/oneapi/mkl/latest
+    elif [ -d "/opt/intel/mkl" ]; then
+        export MKLROOT=/opt/intel/mkl
+    elif [ -d "/usr/local/mkl" ]; then
+        export MKLROOT=/usr/local/mkl
+    fi
+fi
+
+if [ -n "$MKLROOT" ]; then
+    export LD_LIBRARY_PATH=$MKLROOT/lib/intel64:$LD_LIBRARY_PATH
+    echo "MKLROOT set to: $MKLROOT"
+else
+    echo "Warning: MKLROOT not found, compilation may fail"
+fi
 
 # Compile
 make clean

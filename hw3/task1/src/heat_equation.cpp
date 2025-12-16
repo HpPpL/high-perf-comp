@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 #include <fstream>
+#include <algorithm>
 
 // Точное решение уравнения теплопроводности
 // u(x,t) = (4u₀/π) * Σ[m=0 to ∞] (1/(2m+1)) * exp(-kπ²(2m+1)²t/l²) * sin(π(2m+1)x/l)
