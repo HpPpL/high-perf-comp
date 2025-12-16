@@ -86,12 +86,14 @@ int main(int argc, char* argv[]) {
     // Выделение памяти на хосте для начальных данных и обмена
     std::vector<double> h_u_initial(local_N);
     double *h_boundary_left = nullptr, *h_boundary_right = nullptr;
+    double *h_boundary_send_right = nullptr;  // Отдельный буфер для отправки правой границы
     
     if (rank > 0) {
         cudaMallocHost(&h_boundary_left, sizeof(double));
     }
     if (rank < size - 1) {
         cudaMallocHost(&h_boundary_right, sizeof(double));
+        cudaMallocHost(&h_boundary_send_right, sizeof(double));  // Отдельный буфер для отправки
     }
     
     // Инициализация начального распределения на root процессе
@@ -144,12 +146,15 @@ int main(int argc, char* argv[]) {
     
     // Основной цикл по времени
     for (int n = 0; n < num_time_steps; ++n) {
+        // Синхронизация GPU перед обменом данными
+        cudaDeviceSynchronize();
+        
         // Обмен граничными значениями между процессами
         // Используем неблокирующие операции для избежания deadlock
         MPI_Request req_send_left, req_recv_left, req_send_right, req_recv_right;
         
         if (rank > 0) {
-            // Копирование левой границы с GPU на хост
+            // Копирование левой границы с GPU на хост (для отправки предыдущему процессу)
             cudaMemcpy(h_boundary_left, &d_u_curr[1], sizeof(double), cudaMemcpyDeviceToHost);
             cudaError_t err = cudaGetLastError();
             if (err != cudaSuccess) {
@@ -159,26 +164,26 @@ int main(int argc, char* argv[]) {
             // Отправка предыдущему процессу (неблокирующая)
             MPI_Isend(h_boundary_left, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &req_send_left);
             // Получение от предыдущего процесса (неблокирующая)
-            MPI_Irecv(h_boundary_left, 1, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD, &req_recv_left);
+            MPI_Irecv(h_boundary_left, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &req_recv_left);
         }
         
         if (rank < size - 1) {
-            // Получение от следующего процесса (неблокирующая)
-            MPI_Irecv(h_boundary_right, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &req_recv_right);
-            // Копирование правой границы с GPU на хост
-            cudaMemcpy(h_boundary_right, &d_u_curr[local_N], sizeof(double), cudaMemcpyDeviceToHost);
+            // Копирование правой границы с GPU на хост (для отправки следующему процессу)
+            // Используем отдельный буфер, чтобы не перезаписать данные для приема
+            cudaMemcpy(h_boundary_send_right, &d_u_curr[local_N], sizeof(double), cudaMemcpyDeviceToHost);
             cudaError_t err = cudaGetLastError();
             if (err != cudaSuccess) {
                 std::cerr << "Process " << rank << " CUDA error (right boundary copy): " 
                           << cudaGetErrorString(err) << std::endl;
             }
-            // Отправка следующему процессу (неблокирующая)
-            MPI_Isend(h_boundary_right, 1, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &req_send_right);
+            // Получение от следующего процесса (неблокирующая)
+            MPI_Irecv(h_boundary_right, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &req_recv_right);
+            // Отправка следующему процессу (неблокирующая) - используем отдельный буфер
+            MPI_Isend(h_boundary_send_right, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &req_send_right);
         }
         
-        // Ждем завершения обмена граничными значениями
+        // Ждем завершения получения граничных значений (необходимо для вычислений)
         if (rank > 0) {
-            MPI_Wait(&req_send_left, MPI_STATUS_IGNORE);
             MPI_Wait(&req_recv_left, MPI_STATUS_IGNORE);
             // Копирование полученного значения обратно на GPU
             cudaMemcpy(&d_u_curr[0], h_boundary_left, sizeof(double), cudaMemcpyHostToDevice);
@@ -198,7 +203,6 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Process " << rank << " CUDA error (right boundary set): " 
                           << cudaGetErrorString(err) << std::endl;
             }
-            MPI_Wait(&req_send_right, MPI_STATUS_IGNORE);
         }
         
         // Вычисление нового временного слоя на GPU
@@ -208,6 +212,16 @@ int main(int argc, char* argv[]) {
             std::cerr << "Process " << rank << " CUDA kernel error: " 
                       << cudaGetErrorString(err) << std::endl;
         }
+        
+        // Ожидание завершения отправки (для синхронизации, но вычисления уже выполнены)
+        if (rank > 0) {
+            MPI_Wait(&req_send_left, MPI_STATUS_IGNORE);
+        }
+        
+        if (rank < size - 1) {
+            MPI_Wait(&req_send_right, MPI_STATUS_IGNORE);
+        }
+        
         cudaDeviceSynchronize();
         
         // Применение граничных условий
@@ -290,6 +304,7 @@ int main(int argc, char* argv[]) {
     cudaFree(d_u_next);
     if (h_boundary_left) cudaFreeHost(h_boundary_left);
     if (h_boundary_right) cudaFreeHost(h_boundary_right);
+    if (h_boundary_send_right) cudaFreeHost(h_boundary_send_right);
     
     MPI_Finalize();
     return 0;
