@@ -51,14 +51,16 @@ run_task() {
     
     # Запуск через sbatch
     echo "  Отправка задачи в очередь SLURM..."
-    job_id=$(sbatch run_${task}.sbatch 2>&1 | grep -oP '\d+' | head -1)
+    sbatch_output=$(sbatch run_${task}.sbatch 2>&1)
+    job_id=$(echo "$sbatch_output" | grep -oP 'Submitted batch job \K\d+' || echo "$sbatch_output" | grep -oE '[0-9]+' | head -1)
     
-    if [ -n "$job_id" ]; then
+    if [ -n "$job_id" ] && [[ "$job_id" =~ ^[0-9]+$ ]]; then
         echo -e "  ${GREEN}Задача отправлена, Job ID: $job_id${NC}"
         echo "  Проверить статус: squeue -j $job_id"
         echo "$job_id" > /tmp/hw3_${task}_jobid.txt
     else
         echo -e "  ${RED}Ошибка при отправке задачи!${NC}"
+        echo "  Вывод sbatch: $sbatch_output"
         cd "$SCRIPT_DIR"
         return 1
     fi
@@ -167,8 +169,13 @@ job_ids=()
 for task in "${tasks_to_run[@]}"; do
     if run_task "$task"; then
         ((success_count++))
-        if [ -n "$job_id" ]; then
-            job_ids+=("$job_id")
+        # Читаем job_id из файла, который создала функция
+        job_file="/tmp/hw3_${task}_jobid.txt"
+        if [ -f "$job_file" ]; then
+            job_id=$(cat "$job_file")
+            if [ -n "$job_id" ] && [[ "$job_id" =~ ^[0-9]+$ ]]; then
+                job_ids+=("$job_id")
+            fi
         fi
     else
         ((fail_count++))

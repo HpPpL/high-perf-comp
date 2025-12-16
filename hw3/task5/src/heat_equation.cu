@@ -145,30 +145,69 @@ int main(int argc, char* argv[]) {
     // Основной цикл по времени
     for (int n = 0; n < num_time_steps; ++n) {
         // Обмен граничными значениями между процессами
+        // Используем неблокирующие операции для избежания deadlock
+        MPI_Request req_send_left, req_recv_left, req_send_right, req_recv_right;
+        
         if (rank > 0) {
             // Копирование левой границы с GPU на хост
             cudaMemcpy(h_boundary_left, &d_u_curr[1], sizeof(double), cudaMemcpyDeviceToHost);
-            // Отправка предыдущему процессу
-            MPI_Send(h_boundary_left, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
-            // Получение от предыдущего процесса
-            MPI_Recv(h_boundary_left, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            // Копирование обратно на GPU
-            cudaMemcpy(&d_u_curr[0], h_boundary_left, sizeof(double), cudaMemcpyHostToDevice);
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                std::cerr << "Process " << rank << " CUDA error (left boundary copy): " 
+                          << cudaGetErrorString(err) << std::endl;
+            }
+            // Отправка предыдущему процессу (неблокирующая)
+            MPI_Isend(h_boundary_left, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &req_send_left);
+            // Получение от предыдущего процесса (неблокирующая)
+            MPI_Irecv(h_boundary_left, 1, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD, &req_recv_left);
         }
         
         if (rank < size - 1) {
-            // Получение от следующего процесса
-            MPI_Recv(h_boundary_right, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            // Копирование на GPU
-            cudaMemcpy(&d_u_curr[local_N + 1], h_boundary_right, sizeof(double), cudaMemcpyHostToDevice);
+            // Получение от следующего процесса (неблокирующая)
+            MPI_Irecv(h_boundary_right, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &req_recv_right);
             // Копирование правой границы с GPU на хост
             cudaMemcpy(h_boundary_right, &d_u_curr[local_N], sizeof(double), cudaMemcpyDeviceToHost);
-            // Отправка следующему процессу
-            MPI_Send(h_boundary_right, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                std::cerr << "Process " << rank << " CUDA error (right boundary copy): " 
+                          << cudaGetErrorString(err) << std::endl;
+            }
+            // Отправка следующему процессу (неблокирующая)
+            MPI_Isend(h_boundary_right, 1, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &req_send_right);
+        }
+        
+        // Ждем завершения обмена граничными значениями
+        if (rank > 0) {
+            MPI_Wait(&req_send_left, MPI_STATUS_IGNORE);
+            MPI_Wait(&req_recv_left, MPI_STATUS_IGNORE);
+            // Копирование полученного значения обратно на GPU
+            cudaMemcpy(&d_u_curr[0], h_boundary_left, sizeof(double), cudaMemcpyHostToDevice);
+            err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                std::cerr << "Process " << rank << " CUDA error (left boundary set): " 
+                          << cudaGetErrorString(err) << std::endl;
+            }
+        }
+        
+        if (rank < size - 1) {
+            MPI_Wait(&req_recv_right, MPI_STATUS_IGNORE);
+            // Копирование полученного значения на GPU
+            cudaMemcpy(&d_u_curr[local_N + 1], h_boundary_right, sizeof(double), cudaMemcpyHostToDevice);
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                std::cerr << "Process " << rank << " CUDA error (right boundary set): " 
+                          << cudaGetErrorString(err) << std::endl;
+            }
+            MPI_Wait(&req_send_right, MPI_STATUS_IGNORE);
         }
         
         // Вычисление нового временного слоя на GPU
         heat_step_kernel<<<blocks, threads_per_block>>>(d_u_curr, d_u_next, local_N, coeff);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            std::cerr << "Process " << rank << " CUDA kernel error: " 
+                      << cudaGetErrorString(err) << std::endl;
+        }
         cudaDeviceSynchronize();
         
         // Применение граничных условий
@@ -191,10 +230,24 @@ int main(int argc, char* argv[]) {
     cudaMemcpy(h_u_curr.data(), d_u_curr, mem_size, cudaMemcpyDeviceToHost);
     
     // Сбор результатов на root процессе
-    std::vector<double> u_final(N);
+    std::vector<double> u_final(N, 0.0);  // Инициализация нулями
     MPI_Gatherv(&h_u_curr[1], local_N, MPI_DOUBLE,
                 u_final.data(), sendcounts.data(), displs.data(), MPI_DOUBLE,
                 0, MPI_COMM_WORLD);
+    
+    // Проверка корректности данных
+    if (rank == 0) {
+        bool has_nan = false;
+        for (int i = 0; i < N; ++i) {
+            if (std::isnan(u_final[i]) || std::isinf(u_final[i])) {
+                has_nan = true;
+                break;
+            }
+        }
+        if (has_nan) {
+            std::cerr << "Warning: NaN or Inf detected in final results!" << std::endl;
+        }
+    }
     
     // Измерение времени выполнения
     double elapsed_time = std::chrono::duration<double>(end_time - start_time).count();
@@ -215,10 +268,20 @@ int main(int argc, char* argv[]) {
         std::cout << "  Время выполнения (средн): " << avg_time << " сек" << std::endl;
         
         std::cout << "\nПримеры значений температуры:" << std::endl;
+        bool all_valid = true;
         for (int i = 0; i <= 10; i += 2) {
             int idx = i * N / 10;
             if (idx >= N) idx = N - 1;
-            std::cout << "  u(" << (idx * h) << ") = " << u_final[idx] << std::endl;
+            double value = u_final[idx];
+            if (std::isnan(value) || std::isinf(value)) {
+                all_valid = false;
+                std::cout << "  u(" << (idx * h) << ") = NaN/Inf (invalid)" << std::endl;
+            } else {
+                std::cout << "  u(" << (idx * h) << ") = " << value << std::endl;
+            }
+        }
+        if (!all_valid) {
+            std::cerr << "Warning: Some values are NaN/Inf. This may indicate a problem with GPU computation or data synchronization." << std::endl;
         }
     }
     

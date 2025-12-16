@@ -133,10 +133,24 @@ int main(int argc, char* argv[]) {
     auto end_time = std::chrono::high_resolution_clock::now();
     
     // Сбор результатов с использованием коллективной операции Gatherv
-    std::vector<double> u_final(N);
+    std::vector<double> u_final(N, 0.0);  // Инициализация нулями
     MPI_Gatherv(&u_curr[1], local_N, MPI_DOUBLE,
                 u_final.data(), sendcounts.data(), displs.data(), MPI_DOUBLE,
                 0, MPI_COMM_WORLD);
+    
+    // Проверка корректности данных после Gatherv
+    if (rank == 0) {
+        bool has_nan = false;
+        for (int i = 0; i < N; ++i) {
+            if (std::isnan(u_final[i]) || std::isinf(u_final[i])) {
+                has_nan = true;
+                break;
+            }
+        }
+        if (has_nan) {
+            std::cerr << "Warning: NaN or Inf detected in results after MPI_Gatherv!" << std::endl;
+        }
+    }
     
     // Измерение времени выполнения
     double elapsed_time = std::chrono::duration<double>(end_time - start_time).count();
@@ -158,10 +172,20 @@ int main(int argc, char* argv[]) {
         
         // Вывод нескольких значений результата
         std::cout << "\nПримеры значений температуры:" << std::endl;
+        bool all_valid = true;
         for (int i = 0; i <= 10; i += 2) {
             int idx = i * N / 10;
             if (idx >= N) idx = N - 1;
-            std::cout << "  u(" << (idx * h) << ") = " << u_final[idx] << std::endl;
+            double value = u_final[idx];
+            if (std::isnan(value) || std::isinf(value)) {
+                all_valid = false;
+                std::cout << "  u(" << (idx * h) << ") = NaN/Inf (invalid)" << std::endl;
+            } else {
+                std::cout << "  u(" << (idx * h) << ") = " << value << std::endl;
+            }
+        }
+        if (!all_valid) {
+            std::cerr << "Warning: Some values are NaN/Inf. This may indicate a problem with data collection." << std::endl;
         }
         
         // Сохранение результатов в CSV
