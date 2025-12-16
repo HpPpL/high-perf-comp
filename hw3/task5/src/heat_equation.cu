@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
             MPI_Wait(&req_recv_left, MPI_STATUS_IGNORE);
             // Копирование полученного значения обратно на GPU
             cudaMemcpy(&d_u_curr[0], h_boundary_left, sizeof(double), cudaMemcpyHostToDevice);
-            err = cudaGetLastError();
+            cudaError_t err = cudaGetLastError();
             if (err != cudaSuccess) {
                 std::cerr << "Process " << rank << " CUDA error (left boundary set): " 
                           << cudaGetErrorString(err) << std::endl;
