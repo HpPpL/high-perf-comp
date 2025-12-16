@@ -81,8 +81,8 @@ def plot_task1_correctness():
         ax2.set_yscale('log')
         
         plt.tight_layout()
-        plt.savefig('task1_correctness.png', dpi=150, bbox_inches='tight')
-        print("  Сохранено: task1_correctness.png")
+        plt.savefig('plots/task1_correctness.png', dpi=150, bbox_inches='tight')
+        print("  Сохранено: plots/task1_correctness.png")
         plt.close()
         
     except Exception as e:
@@ -121,8 +121,8 @@ def plot_task2_scalability():
         ax.set_yscale('log')
     
     plt.tight_layout()
-    plt.savefig('task2_scalability.png', dpi=150, bbox_inches='tight')
-    print("  Сохранено: task2_scalability.png")
+    plt.savefig('plots/task2_scalability.png', dpi=150, bbox_inches='tight')
+    print("  Сохранено: plots/task2_scalability.png")
     plt.close()
 
 def plot_task3_comparison():
@@ -166,8 +166,8 @@ def plot_task3_comparison():
         ax.set_yscale('log')
     
     plt.tight_layout()
-    plt.savefig('task3_comparison.png', dpi=150, bbox_inches='tight')
-    print("  Сохранено: task3_comparison.png")
+    plt.savefig('plots/task3_comparison.png', dpi=150, bbox_inches='tight')
+    print("  Сохранено: plots/task3_comparison.png")
     plt.close()
 
 def plot_task4_performance():
@@ -205,8 +205,8 @@ def plot_task4_performance():
         ax.set_yscale('log')
     
     plt.tight_layout()
-    plt.savefig('task4_performance.png', dpi=150, bbox_inches='tight')
-    print("  Сохранено: task4_performance.png")
+    plt.savefig('plots/task4_performance.png', dpi=150, bbox_inches='tight')
+    print("  Сохранено: plots/task4_performance.png")
     plt.close()
 
 def plot_task6_2d_results():
@@ -245,8 +245,8 @@ def plot_task6_2d_results():
         cbar.set_label('Температура u(x,y)', fontsize=12)
         
         plt.tight_layout()
-        plt.savefig('task6_2d_results.png', dpi=150, bbox_inches='tight')
-        print("  Сохранено: task6_2d_results.png")
+        plt.savefig('plots/task6_2d_results.png', dpi=150, bbox_inches='tight')
+        print("  Сохранено: plots/task6_2d_results.png")
         plt.close()
         
     except Exception as e:
