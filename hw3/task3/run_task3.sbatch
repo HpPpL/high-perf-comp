@@ -2,7 +2,7 @@
 #SBATCH --job-name=hw3_task3
 #SBATCH --output=task3_output_%j.txt
 #SBATCH --error=task3_error_%j.txt
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=24
 #SBATCH --cpus-per-task=1

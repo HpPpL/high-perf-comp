@@ -8,7 +8,21 @@
 #SBATCH --gpus=2
 
 # Load required modules
-# Попробуем загрузить модули с обработкой ошибок
+# Сначала загружаем системный MPI (если доступен)
+echo "Loading MPI module..."
+MPI_LOADED=false
+if module load openmpi/4.1.5 2>/dev/null; then
+    echo "Loaded: openmpi/4.1.5"
+    MPI_LOADED=true
+elif module load openmpi3/3.1.4 2>/dev/null; then
+    echo "Loaded: openmpi3/3.1.4"
+    MPI_LOADED=true
+elif module load openmpi3 2>/dev/null; then
+    echo "Loaded: openmpi3 (default)"
+    MPI_LOADED=true
+fi
+
+# Загружаем NVIDIA HPC SDK для nvcc
 echo "Loading NVIDIA HPC SDK module..."
 if ! module load nvidia_sdk/nvhpc/23.5 2>/dev/null; then
     echo "Warning: nvidia_sdk/nvhpc/23.5 not found, trying alternative paths..."
@@ -19,7 +33,7 @@ if ! module load nvidia_sdk/nvhpc/23.5 2>/dev/null; then
     fi
 fi
 
-# Проверяем доступность MPI из nvhpc
+# Проверяем доступность MPI
 echo "Checking MPI availability..."
 if command -v mpicc &> /dev/null; then
     MPI_CC=$(which mpicc)
@@ -39,7 +53,8 @@ if command -v mpicc &> /dev/null; then
         echo "MPI library path: $MPI_LIB"
     fi
 else
-    # Пробуем найти MPI в nvhpc
+    echo "Warning: mpicc not found in PATH after module loading"
+    # Пробуем найти MPI в nvhpc как fallback
     NVHPC_PATH="/opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi"
     if [ -d "$NVHPC_PATH/bin" ]; then
         export PATH=$NVHPC_PATH/bin:$PATH
@@ -53,7 +68,8 @@ else
             export LD_LIBRARY_PATH=$NVHPC_HPCX/lib:$LD_LIBRARY_PATH
             echo "MPI paths added from hpcx"
         else
-            echo "Warning: MPI not found, compilation may fail"
+            echo "Error: MPI not found"
+            exit 1
         fi
     fi
 fi
@@ -74,12 +90,22 @@ if [ $? -eq 0 ]; then
     fi
     
     # Run with 2 MPI processes (required)
+    # Используем srun с явным указанием MPI через переменные окружения
     if command -v srun &> /dev/null; then
+        # Убеждаемся, что используем правильный MPI runtime
+        export OMPI_MCA_btl=^openib
+        export OMPI_MCA_btl_vader_single_copy_mechanism=none
         if srun -n 2 --gpus=2 ./heat_equation 10000; then
             echo "✓ Task 5 выполнена успешно"
         else
             echo "✗ Ошибка выполнения Task 5"
-            exit 1
+            echo "Попытка запуска через mpirun..."
+            if mpirun -np 2 ./heat_equation 10000; then
+                echo "✓ Task 5 выполнена успешно (через mpirun)"
+            else
+                echo "✗ Ошибка выполнения Task 5 (оба метода)"
+                exit 1
+            fi
         fi
     else
         if mpirun -np 2 ./heat_equation 10000; then
