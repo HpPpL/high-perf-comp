@@ -15,15 +15,29 @@ ifeq ($(UNAME_S),Linux)
     NVCC = nvcc
     NVCCFLAGS += -Xcompiler -fopenmp
     # Попытка найти MPI
-    ifeq ($(shell which mpicc 2>/dev/null),)
+    MPI_FOUND := $(shell which mpicc 2>/dev/null)
+    ifeq ($(MPI_FOUND),)
         # Пробуем использовать MPI из nvhpc
-        MPI_INC := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi/include
-        MPI_LIB := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi/lib
-        NVCCFLAGS += -I$(MPI_INC)
-        MPI_LIBS := -L$(MPI_LIB) -lmpi
+        NVHPC_MPI_INC := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi/include
+        NVHPC_MPI_LIB := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi/lib
+        ifeq ($(wildcard $(NVHPC_MPI_INC)/mpi.h),)
+            # Пробуем альтернативный путь
+            NVHPC_MPI_INC := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/hpcx/hpcx-2.15/ompi/include
+            NVHPC_MPI_LIB := /opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/hpcx/hpcx-2.15/ompi/lib
+        endif
+        ifneq ($(wildcard $(NVHPC_MPI_INC)/mpi.h),)
+            NVCCFLAGS += -I$(NVHPC_MPI_INC)
+            MPI_LIBS := -L$(NVHPC_MPI_LIB) -lmpi
+            $(info Using MPI from nvhpc: $(NVHPC_MPI_INC))
+        else
+            # Используем системный MPI (может быть в стандартных путях)
+            MPI_LIBS := -lmpi
+            $(warning MPI not found, trying system MPI)
+        endif
     else
         # Используем системный MPI
         MPI_LIBS := -lmpi
+        $(info Using system MPI: $(MPI_FOUND))
     endif
 else
     NVCCFLAGS += -Xcompiler -fopenmp

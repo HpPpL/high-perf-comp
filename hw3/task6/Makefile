@@ -34,6 +34,12 @@ SOURCES = src/heat_equation_2d.cpp
 TARGET = heat_equation_2d
 
 $(TARGET): $(SOURCES)
+	@echo "Compiling with MKL..."
+	@echo "MKL_INCLUDE: $(MKL_INCLUDE)"
+	@echo "MKL_LIB_DIR: $(MKL_LIB_DIR)"
+	@if [ -z "$(MKLROOT)" ] || [ ! -d "$(MKLROOT)/include" ]; then \
+		echo "Warning: MKL include directory not found. Check MKLROOT environment variable."; \
+	fi
 	$(CXX) $(CXXFLAGS) $(MKL_INCLUDE) -o $(TARGET) $(SOURCES) $(MKL_LIB_DIR) $(MKL_LIBS)
 
 clean:
