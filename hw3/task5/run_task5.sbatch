@@ -22,7 +22,22 @@ fi
 # Проверяем доступность MPI из nvhpc
 echo "Checking MPI availability..."
 if command -v mpicc &> /dev/null; then
-    echo "MPI found in PATH: $(which mpicc)"
+    MPI_CC=$(which mpicc)
+    echo "MPI found in PATH: $MPI_CC"
+    
+    # Получаем пути к MPI через mpicc для передачи в Makefile
+    MPI_INC=$(mpicc --showme:compile 2>/dev/null | grep -oP '(?<=-I)\S+' | head -1)
+    MPI_LIB=$(mpicc --showme:link 2>/dev/null | grep -oP '(?<=-L)\S+' | head -1)
+    
+    if [ -n "$MPI_INC" ]; then
+        export MPI_INCLUDE_PATH="$MPI_INC"
+        echo "MPI include path: $MPI_INC"
+    fi
+    if [ -n "$MPI_LIB" ]; then
+        export MPI_LIBRARY_PATH="$MPI_LIB"
+        export LD_LIBRARY_PATH=$MPI_LIB:$LD_LIBRARY_PATH
+        echo "MPI library path: $MPI_LIB"
+    fi
 else
     # Пробуем найти MPI в nvhpc
     NVHPC_PATH="/opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/mpi"
@@ -31,7 +46,15 @@ else
         export LD_LIBRARY_PATH=$NVHPC_PATH/lib:$LD_LIBRARY_PATH
         echo "MPI paths added from nvhpc"
     else
-        echo "Warning: MPI not found, compilation may fail"
+        # Пробуем альтернативный путь
+        NVHPC_HPCX="/opt/software/nvidia/hpc_sdk/v23.5/Linux_x86_64/23.5/comm_libs/hpcx/hpcx-2.15/ompi"
+        if [ -d "$NVHPC_HPCX/bin" ]; then
+            export PATH=$NVHPC_HPCX/bin:$PATH
+            export LD_LIBRARY_PATH=$NVHPC_HPCX/lib:$LD_LIBRARY_PATH
+            echo "MPI paths added from hpcx"
+        else
+            echo "Warning: MPI not found, compilation may fail"
+        fi
     fi
 fi
 

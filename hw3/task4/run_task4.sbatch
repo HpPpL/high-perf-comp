@@ -13,13 +13,20 @@ if ! module load openmpi/4.1.5 2>/dev/null; then
     echo "Warning: openmpi/4.1.5 not found, trying openmpi3/3.1.4..."
     if ! module load openmpi3/3.1.4 2>/dev/null; then
         echo "Warning: openmpi3/3.1.4 not found, trying to find available MPI..."
-        module avail openmpi 2>&1 | head -10
-        # Пробуем загрузить первый доступный openmpi3
-        module load openmpi3 2>/dev/null || {
+        # Пробуем загрузить первый доступный openmpi3 (по умолчанию)
+        if ! module load openmpi3 2>/dev/null; then
             echo "Error: No MPI module found!"
+            echo "Available modules:"
+            module avail openmpi 2>&1 | head -10
             exit 1
-        }
+        else
+            echo "Loaded: openmpi3 (default version)"
+        fi
+    else
+        echo "Loaded: openmpi3/3.1.4"
     fi
+else
+    echo "Loaded: openmpi/4.1.5"
 fi
 
 # Compile

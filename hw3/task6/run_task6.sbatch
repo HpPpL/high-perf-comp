@@ -36,15 +36,38 @@ if [ -z "$MKLROOT" ]; then
 fi
 
 if [ -n "$MKLROOT" ]; then
-    export LD_LIBRARY_PATH=$MKLROOT/lib/intel64:$LD_LIBRARY_PATH
     echo "MKLROOT set to: $MKLROOT"
     
-    # Проверяем наличие необходимых файлов
+    # Проверяем наличие необходимых файлов и находим правильный путь к библиотекам
     if [ ! -d "$MKLROOT/include" ]; then
         echo "Warning: MKL include directory not found at $MKLROOT/include"
     fi
-    if [ ! -d "$MKLROOT/lib/intel64" ]; then
-        echo "Warning: MKL lib directory not found at $MKLROOT/lib/intel64"
+    
+    # Пробуем разные возможные пути к библиотекам
+    MKL_LIB_PATH=""
+    for lib_path in "$MKLROOT/lib/intel64" "$MKLROOT/lib" "$MKLROOT/lib64" "/opt/intel/mkl/lib" "/opt/intel/mkl/lib64"; do
+        if [ -d "$lib_path" ] && [ -f "$lib_path/libmkl_core.so" ] || [ -f "$lib_path/libmkl_core.a" ]; then
+            MKL_LIB_PATH="$lib_path"
+            echo "Found MKL libraries at: $MKL_LIB_PATH"
+            break
+        fi
+    done
+    
+    if [ -n "$MKL_LIB_PATH" ]; then
+        export LD_LIBRARY_PATH=$MKL_LIB_PATH:$LD_LIBRARY_PATH
+        export MKLROOT_LIB=$MKL_LIB_PATH
+        echo "MKL library path set to: $MKL_LIB_PATH"
+    else
+        echo "Warning: MKL lib directory not found, trying standard paths..."
+        # Пробуем найти библиотеки через find
+        MKL_LIB_FOUND=$(find "$MKLROOT" -name "libmkl_core.so" -o -name "libmkl_core.a" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+        if [ -n "$MKL_LIB_FOUND" ]; then
+            export MKLROOT_LIB=$MKL_LIB_FOUND
+            export LD_LIBRARY_PATH=$MKL_LIB_FOUND:$LD_LIBRARY_PATH
+            echo "Found MKL libraries via find at: $MKL_LIB_FOUND"
+        else
+            export LD_LIBRARY_PATH=$MKLROOT/lib/intel64:$MKLROOT/lib:$LD_LIBRARY_PATH
+        fi
     fi
 else
     echo "Warning: MKLROOT not found, compilation may fail"

@@ -4,7 +4,33 @@ CXXFLAGS = -O3 -std=c++17 -Wall
 # MKL flags - используем переменную окружения, если установлена
 ifdef MKLROOT
     MKL_INCLUDE = -I$(MKLROOT)/include
-    MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+    # Используем путь из переменной окружения, если установлен
+    ifdef MKLROOT_LIB
+        MKL_LIB_DIR = -L$(MKLROOT_LIB)
+        $(info Using MKL lib from MKLROOT_LIB: $(MKLROOT_LIB))
+    else
+        # Пробуем найти библиотеки в разных местах
+        ifneq ($(wildcard $(MKLROOT)/lib/intel64/libmkl_core.so),)
+            MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+            $(info Found MKL lib at: $(MKLROOT)/lib/intel64)
+        else ifneq ($(wildcard $(MKLROOT)/lib/libmkl_core.so),)
+            MKL_LIB_DIR = -L$(MKLROOT)/lib
+            $(info Found MKL lib at: $(MKLROOT)/lib)
+        else ifneq ($(wildcard $(MKLROOT)/lib64/libmkl_core.so),)
+            MKL_LIB_DIR = -L$(MKLROOT)/lib64
+            $(info Found MKL lib at: $(MKLROOT)/lib64)
+        else
+            # Пробуем найти через find
+            MKL_LIB_FOUND := $(shell find $(MKLROOT) -name "libmkl_core.so" -o -name "libmkl_core.a" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+            ifneq ($(MKL_LIB_FOUND),)
+                MKL_LIB_DIR = -L$(MKL_LIB_FOUND)
+                $(info Found MKL lib via find at: $(MKL_LIB_FOUND))
+            else
+                MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+                $(warning MKL lib not found, using default: $(MKLROOT)/lib/intel64)
+            endif
+        endif
+    endif
 else
     # Пробуем стандартные пути
     MKLROOT = /opt/intel/oneapi/mkl/latest
@@ -15,7 +41,16 @@ else
         MKLROOT = /usr/local/mkl
     endif
     MKL_INCLUDE = -I$(MKLROOT)/include
-    MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+    # Пробуем найти библиотеки
+    ifneq ($(wildcard $(MKLROOT)/lib/intel64/libmkl_core.so),)
+        MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+    else ifneq ($(wildcard $(MKLROOT)/lib/libmkl_core.so),)
+        MKL_LIB_DIR = -L$(MKLROOT)/lib
+    else ifneq ($(wildcard $(MKLROOT)/lib64/libmkl_core.so),)
+        MKL_LIB_DIR = -L$(MKLROOT)/lib64
+    else
+        MKL_LIB_DIR = -L$(MKLROOT)/lib/intel64
+    endif
 endif
 
 MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl

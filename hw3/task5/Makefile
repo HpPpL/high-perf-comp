@@ -35,8 +35,32 @@ ifeq ($(UNAME_S),Linux)
             $(warning MPI not found, trying system MPI)
         endif
     else
-        # Используем системный MPI
-        MPI_LIBS := -lmpi
+        # Используем системный MPI - получаем пути через mpicc или переменные окружения
+        ifdef MPI_INCLUDE_PATH
+            MPI_INC := $(MPI_INCLUDE_PATH)
+            NVCCFLAGS += -I$(MPI_INC)
+            $(info Using MPI include from environment: $(MPI_INC))
+        else
+            MPI_INC := $(shell $(MPI_FOUND) --showme:compile 2>/dev/null | grep -oP '(?<=-I)\S+' | head -1)
+            ifneq ($(MPI_INC),)
+                NVCCFLAGS += -I$(MPI_INC)
+                $(info Using MPI include from mpicc: $(MPI_INC))
+            endif
+        endif
+        
+        ifdef MPI_LIBRARY_PATH
+            MPI_LIB_DIR := $(MPI_LIBRARY_PATH)
+            MPI_LIBS := -L$(MPI_LIB_DIR) -lmpi
+            $(info Using MPI lib from environment: $(MPI_LIB_DIR))
+        else
+            MPI_LIB_DIR := $(shell $(MPI_FOUND) --showme:link 2>/dev/null | grep -oP '(?<=-L)\S+' | head -1)
+            ifneq ($(MPI_LIB_DIR),)
+                MPI_LIBS := -L$(MPI_LIB_DIR) -lmpi
+                $(info Using MPI lib from mpicc: $(MPI_LIB_DIR))
+            else
+                MPI_LIBS := -lmpi
+            endif
+        endif
         $(info Using system MPI: $(MPI_FOUND))
     endif
 else
